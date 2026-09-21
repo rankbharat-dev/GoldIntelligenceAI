@@ -717,3 +717,4 @@ an edge at all.
 | A4 | Confirm commission per lot and current swap values for the account type. Until confirmed, the pessimistic scenario charges $7/lot round turn (`ci-costs build --commission-per-lot X --commission-confirmed` once known) | Phase 7 |
 | A5 | Economic-news calendar for widened stop slippage (hook exists: `slippage_points(in_window=...)`; only the rollover window is flagged today) | Phase 7 |
 | A6 | Refit slippage parameters from simulated-vs-live fills | Phase 9 |
+| A7 | Owner will trade on an **Exness Raw Spread** account (2026-09-21). Open a Raw Spread demo so its ticks calibrate a Raw cost profile; promotion uses that profile. Roadmap order revised in `docs/MASTER_PROMPT.md` | Raw cost profile |

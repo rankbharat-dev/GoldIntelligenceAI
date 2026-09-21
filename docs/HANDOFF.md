@@ -2,6 +2,11 @@
 
 Last updated: 2026-09-21 · End of Phase 2 · Owner communicates in Hinglish.
 
+> **Goal, target dashboard and the revised roadmap live in [MASTER_PROMPT.md](MASTER_PROMPT.md)**
+> (owner decisions of 2026-09-21: strategy research workbench + AI Research Engine, 5 years
+> of data now / 20 later, live trading on an Exness Raw Spread account). Its roadmap order
+> replaces the "Next" list below.
+
 ## 1. What this project is
 
 Candle Intelligence AI: an **XAUUSD-only** research platform that tests whether candle
@@ -60,12 +65,12 @@ Data on disk (git-ignored, in `storage/`):
 - Derived `xauusd_exness-mt5trial7_d20260921T071531Z`: `M1/M5/M15/H1.parquet` with `ts_utc`
   and `ts_server`, `quality.json`, `clock_weekly.parquet`, `manifest.json`.
   Research window 2021-07-05 → present (5.2 y). M5/M15/H1 match broker bars 100 %.
-- Cost model `exness-mt5trial7_c20260921T074047Z` in `<derived>/costs/`: `M1_costs` / `M5_costs`
+- Cost model `exness-mt5trial7_c20260921T080957Z` (built from commit 53e442a, clean) in `<derived>/costs/`: `M1_costs` / `M5_costs`
   (per bar: `spread_level`, `spread_obs`, `spread_p25..p99`, `spread_current_p90`,
   `spread_source`, `spread_optimistic/base/pessimistic`, `atr_points`, `vol_bucket`,
   `in_rollover_window`, `abnormal_spread`, `level_imputed`), `spread_cells`,
   `measured_minutes`, `level_daily`, `validation.json`, `cost_model.json`; row in `ci.cost_models`.
-  Built from a dirty tree — rebuild after the Phase 2 commit so `code_version` is clean.
+  (An earlier dirty-tree build `..._c20260921T074047Z` also exists; the API serves the newest.)
 
 ## 5. Known data facts to carry forward
 
@@ -99,14 +104,16 @@ Execution costs live in `costs/execution.py` (scalar functions the backtester wi
 `slippage_points(order, atr_points, scenario, in_window)`, `Commission.usd`,
 `swap_usd(side, lots, entry_utc, exit_utc, spec)` (17:00 NY rollovers, triple Wednesday).
 
-Open items: A4 commission, A5 news calendar, A6 slippage refit (blueprint Appendix A).
+Open items: A4 Raw-account commission, A5 news calendar, A6 slippage refit, A7 Raw Spread
+demo account for a Raw cost profile (blueprint Appendix A).
 
 **Next: Phase 3 — Feature Store (blueprint §7, hard gate).** Candle/sequence/context
 features in `src/candle_intel/features/`, every row carrying `available_at`; leakage suite
 in `tests/leakage/` must pass before any behaviour research. Useful inputs already in the
 cost tables: `atr_points` / `vol_ratio` (known at bar open), `abnormal_spread`,
-`in_rollover_window` (§5.3 hygiene exclusions). Then Phase 4 (candle click → feature
-details in the viewer), Phase 5 (swings, S/R, trendlines).
+`in_rollover_window` (§5.3 hygiene exclusions). After that, follow the revised roadmap in
+[MASTER_PROMPT.md](MASTER_PROMPT.md) §8 (strategy spec + backtester → Strategy Builder UI →
+jobs/robustness → structure → Research Engine → Raw cost profile → ML/assistant → paper).
 
 ## 7. Start-of-session checklist
 

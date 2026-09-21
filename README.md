@@ -7,6 +7,7 @@ execution. Independent of Shiibaa.
 
 | Document | What it is |
 |---|---|
+| [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) | **Session entry point** — goal, target dashboard, revised roadmap, working rules |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | **Start here** — current state, rules, next phase |
 | [docs/ARCHITECTURE_v1.2.md](docs/ARCHITECTURE_v1.2.md) | Current blueprint (supersedes v1.1, v1.0 .docx) |
 | [docs/TECH_SELECTION.md](docs/TECH_SELECTION.md) | Library choices, backtesting decision, custom components |
