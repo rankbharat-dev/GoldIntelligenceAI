@@ -285,6 +285,31 @@ pessimistic scenario.**
   per the broker's `swap_rollover3days`. V1 default is to flat positions before rollover;
   if a strategy holds, swap is charged explicitly.
 
+### Implementation note — 2026-09-21 (Phase 2, `src/candle_intel/costs/`, `ci-costs`)
+
+Two facts measured on Exness-MT5Trial7 changed how Layer 2 is built. The layer structure,
+the three scenarios and the pessimistic promotion gate are unchanged.
+
+1. **Spread moves in broker-set tiers, not by time of day.** Tick-measured spread was
+   ~37 pts in Jan-2026, 137–155 in Mar, 80–90 in Jul–Sep; within a tier the hour-of-day
+   profile is nearly flat except around the daily rollover. An absolute-spread cell table
+   fitted on 2026 ticks therefore cannot describe 2021–2025.
+2. **The M1 bar's `spread_points` is the minimum spread quoted in that minute** — equal to
+   the tick minimum in 100 % of 252,833 overlapping minutes. It is a valid per-bar *level*
+   for the whole history (6,045 bars report ≤ 0 and are imputed from the previous bar).
+
+Layer 2 is therefore `spread_q(bar) = level(bar) × ratio_q(hour_utc, weekday, vol_tercile)`,
+where `ratio` is quoted spread ÷ that minute's minimum, time-weighted from ticks. The
+volatility tercile uses ATR(14) on M5 relative to its trailing 20-day median (raw ATR grew
+~6× with price), computed from completed bars only. Pessimistic = max(observed or modeled
+p90, p90 of the same cell over the last 60 tick days) — a cheap historical tier can never
+flatter a strategy that would pay today's spread. Out-of-sample (last 20 % of tick days):
+level×ratio bias +2.6 %, MAE 3.4 pts; the literal absolute-cell model +10.5 %, MAE 11.2 pts,
+and on pre-tick history it overstates spread by a median 1.61× and predicts a typical spread
+below the quoted minimum in 5.9 % of bars. Acceptance criteria (|bias| ≤ 15 %, p90
+coverage ≥ 85 %) are fixed in `costs/validate.py`. Slippage parameters are explicit
+assumptions (no fills on a demo account) to be refitted in Phase 9.
+
 ---
 
 ## 7. Leakage Control & Intrabar Resolution (closes gaps 3 and 9)
@@ -689,4 +714,6 @@ an edge at all.
 | A1c | Log in with the **investor password** and switch **Algo Trading off** | Before any live session |
 | A2 | ~~Broker~~ — resolved: Exness Technologies Ltd, Exness-MT5Trial7 (demo) | — |
 | A3 | ~~Coverage probe~~ — tool built (`ci-ingest probe`); re-run on the real broker after A1b | Phase 1 |
-| A4 | Confirm commission per lot and current swap values for the account type | Phase 2 |
+| A4 | Confirm commission per lot and current swap values for the account type. Until confirmed, the pessimistic scenario charges $7/lot round turn (`ci-costs build --commission-per-lot X --commission-confirmed` once known) | Phase 7 |
+| A5 | Economic-news calendar for widened stop slippage (hook exists: `slippage_points(in_window=...)`; only the rollover window is flagged today) | Phase 7 |
+| A6 | Refit slippage parameters from simulated-vs-live fills | Phase 9 |

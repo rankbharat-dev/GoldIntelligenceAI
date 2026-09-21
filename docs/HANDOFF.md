@@ -1,6 +1,6 @@
 # Session Handoff — read this first
 
-Last updated: 2026-09-21 · End of Phase 1 · Owner communicates in Hinglish.
+Last updated: 2026-09-21 · End of Phase 2 · Owner communicates in Hinglish.
 
 ## 1. What this project is
 
@@ -40,18 +40,19 @@ Governing spec: [ARCHITECTURE_v1.2.md](ARCHITECTURE_v1.2.md). Library choices:
 | GitHub | https://github.com/rankbharat-dev/GoldIntelligenceAI — **public**; commits use `290257992+rankbharat-dev@users.noreply.github.com` |
 | Git policy | Commit / push only when the owner asks |
 
-## 4. What exists (Phases 0–1 complete)
+## 4. What exists (Phases 0–2 complete)
 
 | Component | Path | Command |
 |---|---|---|
 | MT5 gateway | `src/candle_intel/ingest/mt5_session.py` | — |
 | Ingestion CLI | `src/candle_intel/ingest/cli.py`, `bulk.py` | `ci-ingest status \| probe \| snapshot \| raw --ticks --tick-days 260` |
 | Data engine | `src/candle_intel/data/{clock,quality,aggregate,build}.py` | `ci-data build \| list` |
+| Cost model | `src/candle_intel/costs/{ticks,volatility,spread,execution,validate,build}.py` | `ci-costs build \| list` |
 | Metadata DB | `src/candle_intel/db.py`, `infra/postgres/init/001_schema.sql` | `docker compose up -d` |
 | Research API | `services/api/ci_api/main.py` | `ci-api` → :8000 |
 | MCP server | `services/mt5_mcp/ci_mt5_mcp/server.py`, `.mcp.json` | stdio |
-| Web Chart Viewer | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5) | `npm --prefix apps/web run dev` → :3000 |
-| Tests | `tests/{unit,leakage,integration}` | `pytest` (35 pass incl. `-m mt5`) |
+| Web app | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5): `/` Chart Viewer, `/costs` Costs | `npm --prefix apps/web run dev` → :3000 |
+| Tests | `tests/{unit,leakage,integration}` | `pytest` (50 pass + 2 with `-m mt5`) |
 
 Data on disk (git-ignored, in `storage/`):
 - Raw `xauusd_exness-mt5trial7_20260921T071357Z`: M1 2021-07-01 → 2026-09-21 (1.84 M bars),
@@ -59,12 +60,26 @@ Data on disk (git-ignored, in `storage/`):
 - Derived `xauusd_exness-mt5trial7_d20260921T071531Z`: `M1/M5/M15/H1.parquet` with `ts_utc`
   and `ts_server`, `quality.json`, `clock_weekly.parquet`, `manifest.json`.
   Research window 2021-07-05 → present (5.2 y). M5/M15/H1 match broker bars 100 %.
+- Cost model `exness-mt5trial7_c20260921T074047Z` in `<derived>/costs/`: `M1_costs` / `M5_costs`
+  (per bar: `spread_level`, `spread_obs`, `spread_p25..p99`, `spread_current_p90`,
+  `spread_source`, `spread_optimistic/base/pessimistic`, `atr_points`, `vol_bucket`,
+  `in_rollover_window`, `abnormal_spread`, `level_imputed`), `spread_cells`,
+  `measured_minutes`, `level_daily`, `validation.json`, `cost_model.json`; row in `ci.cost_models`.
+  Built from a dirty tree — rebuild after the Phase 2 commit so `code_version` is clean.
 
 ## 5. Known data facts to carry forward
 
-- Prices are **bid**. Ask must be reconstructed from the spread model (Phase 2).
-- Per-bar `spread_points` is a snapshot; ~6,100 M1 bars report spread ≤ 0 — do not trust it
-  for costs. Use the tick archive.
+- Prices are **bid**. Ask = bid + scenario spread × point (cost tables, Phase 2).
+- Per-bar `spread_points` = the **minimum** spread quoted in that minute (100 % match with
+  ticks). ~6,000 M1 bars report ≤ 0 → imputed (`level_imputed`). It is the spread *level*
+  for pre-tick history, not the spread paid — use the cost tables.
+- **Spread moves in broker-set tiers** (monthly median bar level): ~112 pts (Jul–Aug 2021),
+  ~62 (Sep 2021 – Jun 2024), ~50 (Jul–Aug 2024), ~37 (Sep 2024 – Jan 2026), 77–124
+  (Feb–May 2026), 80–90 (Jun–Sep 2026). Time-of-day shape is flat except the rollover
+  (≈ 16:45–18:30 NY). Pessimistic spread is floored at the last-60-day tier, so 2024–25
+  results will look much worse under pessimistic than base — that is intended.
+- Swap (frozen spec, points mode): long −549.3 pts/night = **$54.93 per lot per night**,
+  short 0; triple on Wednesday. Commission unknown (A4): pessimistic charges $7/lot RT.
 - 500 price-spike bars flagged (not removed); 96 holiday/long closures.
 - Daily break: 16:58 New York, ~63 min. Gaps are classified in `quality.json`.
 - MT5 quirks handled in the gateway: naive datetimes are read as machine-local time
@@ -73,27 +88,25 @@ Data on disk (git-ignored, in `storage/`):
 - Clock inference wraps offsets to ±12 h so "New York + 7" brokers (break at 00:00 server
   time, next calendar day) work; covered by a synthetic UTC+2/+3 DST test.
 
-## 6. Next: Phase 2 — Cost Model (blueprint §6)
+## 6. Phase 2 — Cost Model (done 2026-09-21) and what comes next
 
-Goal: a validated, versioned cost model in `src/candle_intel/costs/`, built from the tick
-archive only.
+Design and numbers: blueprint §6 "Implementation note — 2026-09-21". In short:
+modeled spread = bar level × time-weighted ratio quantile per (hour_utc, weekday, M5
+vol tercile); measured bars use the tick time-weighted mean; scenarios per bar are
+optimistic ≤ base ≤ pessimistic, pessimistic floored at the last-60-day cell p90.
+Validation (last 20 % of tick days, unseen): bias +2.6 %, MAE 3.4 pts → **passed**.
+Execution costs live in `costs/execution.py` (scalar functions the backtester will call):
+`slippage_points(order, atr_points, scenario, in_window)`, `Commission.usd`,
+`swap_usd(side, lots, entry_utc, exit_utc, spec)` (17:00 NY rollovers, triple Wednesday).
 
-1. Load ticks (`storage/raw/xauusd/<raw>/ticks/*.parquet`, `ts_server`, bid, ask); convert
-   to UTC with the clock model from the derived dataset (`clock_weekly.parquet`).
-2. Spread = ask − bid. Build the conditional distribution by
-   (hour_utc, day_of_week, volatility tercile from M5 ATR) → p25 / p50 / p90 / p99 per cell.
-3. Assign spread to every M1/M5 bar: `measured` where ticks exist, `modeled` (from the
-   matching cell) elsewhere; carry `spread_source`.
-4. Three scenarios — optimistic p25, base p50, **pessimistic p90** (promotion gate).
-5. Slippage (market: fixed + volatility-proportional; stops: always adverse, wider around
-   rollover/news), commission per lot, swap from the frozen symbol spec
-   (`swap_long`, `swap_short`, `swap_rollover3days`).
-6. Validate: compare modeled spread with measured on held-out tick days; report error.
-7. Persist to `storage/derived/.../costs/` + `ci.cost_models`; add tests.
-8. Web: a "Costs" panel or page (spread heatmap by hour × weekday).
+Open items: A4 commission, A5 news calendar, A6 slippage refit (blueprint Appendix A).
 
-Then Phase 3 (feature store with `available_at` + leakage suite as a hard gate), Phase 4
-(candle click → feature details in the viewer), Phase 5 (swings, S/R, trendlines).
+**Next: Phase 3 — Feature Store (blueprint §7, hard gate).** Candle/sequence/context
+features in `src/candle_intel/features/`, every row carrying `available_at`; leakage suite
+in `tests/leakage/` must pass before any behaviour research. Useful inputs already in the
+cost tables: `atr_points` / `vol_ratio` (known at bar open), `abnormal_spread`,
+`in_rollover_window` (§5.3 hygiene exclusions). Then Phase 4 (candle click → feature
+details in the viewer), Phase 5 (swings, S/R, trendlines).
 
 ## 7. Start-of-session checklist
 

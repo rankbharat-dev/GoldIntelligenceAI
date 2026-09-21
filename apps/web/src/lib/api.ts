@@ -73,3 +73,114 @@ export function fetchCandles(tf: Timeframe, before?: number, limit = 1500, datas
   if (before !== undefined) q.set("before", String(before));
   return getJson<CandlesResponse>(`/api/candles?${q}`);
 }
+
+// ---------------------------------------------------------------- costs (Phase 2)
+
+export type CostStat = "p25" | "p50" | "p90" | "p99" | "mean";
+export type VolBucket = "all" | "low" | "mid" | "high";
+export type CostWindow = "full" | "current";
+export type CostBasis = "abs" | "ratio";
+export type ScenarioName = "optimistic" | "base" | "pessimistic";
+
+export interface ModelScore {
+  n: number;
+  mean_measured: number;
+  mean_p50: number;
+  mae_p50: number;
+  median_ae_p50: number;
+  coverage_p90: number;
+  coverage_p99: number;
+  relative_bias_p50: number;
+}
+
+type ScenarioMeans = Record<ScenarioName, number>;
+
+export interface CostModelSummary {
+  cost_model_id: string;
+  model_version: string;
+  dataset_id: string;
+  broker: string;
+  broker_server: string;
+  built_utc: string;
+  code_version: { git_commit: string | null; dirty: boolean };
+  config_hash: string;
+  point: number;
+  contract_size: number;
+  tick_window: { tick_days: number; first_day: string; last_day: string; ticks: number };
+  vol_tercile_edges: { low_below: number; high_from: number };
+  summary: {
+    bars: number;
+    measured_bars: number;
+    measured_share: number;
+    level_imputed_bars: number;
+    abnormal_spread_bars: number;
+    rollover_window_bars: number;
+    mean_spread_points: {
+      research_window: ScenarioMeans;
+      last_60_days: ScenarioMeans;
+      by_year: (ScenarioMeans & { year: number; bars: number })[];
+    };
+  };
+  validation: {
+    passed: boolean;
+    chosen_model: string;
+    calibration_days_before: string;
+    holdout_minutes: number;
+    acceptance: { max_abs_relative_bias_p50: number; min_coverage_p90: number };
+    models: { level_x_ratio: ModelScore; abs_cells: ModelScore };
+    abs_cells_on_pre_tick_history: { n: number; share_p50_below_quoted_minimum: number; median_p50_over_level: number };
+  };
+  execution: {
+    scenarios: Record<
+      ScenarioName,
+      {
+        market: { fixed_points: number; atr_frac: number };
+        stop: { fixed_points: number; atr_frac: number };
+        window_multiplier: number;
+        use_unconfirmed_commission: boolean;
+      }
+    >;
+    commission: { per_lot_round_turn_usd: number; confirmed: boolean; unconfirmed_pessimistic_usd: number };
+    swap: {
+      long_usd_per_lot_night: number;
+      short_usd_per_lot_night: number;
+      triple_day_mt5: number;
+      rollover: string;
+    };
+    slippage_status: string;
+  };
+}
+
+export interface CostHeatmap {
+  stat: CostStat;
+  vol: VolBucket;
+  window: CostWindow;
+  basis: CostBasis;
+  unit: string;
+  days: number[]; // ISO weekday, 1 = Monday
+  hours: number[]; // UTC
+  values: (number | null)[][]; // [day][hour]
+  minutes: (number | null)[][];
+}
+
+export interface CostLevels {
+  time: number[]; // UTC epoch seconds, day start
+  level_median: number[];
+  measured_mean: (number | null)[];
+}
+
+export function fetchCostModel(dataset = "latest") {
+  return getJson<CostModelSummary>(`/api/costs/${encodeURIComponent(dataset)}`);
+}
+
+export function fetchCostHeatmap(
+  p: { stat: CostStat; vol: VolBucket; window: CostWindow; basis: CostBasis },
+  dataset = "latest",
+) {
+  const q = new URLSearchParams(p);
+  return getJson<CostHeatmap>(`/api/costs/${encodeURIComponent(dataset)}/heatmap?${q}`);
+}
+
+export function fetchCostLevels(dataset = "latest") {
+  return getJson<CostLevels>(`/api/costs/${encodeURIComponent(dataset)}/levels`);
+}

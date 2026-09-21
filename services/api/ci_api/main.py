@@ -133,6 +133,112 @@ def candles(
     }
 
 
+# ---------------------------------------------------------------- costs (Phase 2)
+
+CostStat = Literal["p25", "p50", "p90", "p99", "mean"]
+VolBucket = Literal["all", "low", "mid", "high"]
+
+
+def _cost_model_dir(ds: str) -> Path:
+    """Newest cost model of a dataset (ci-costs build). Directory names come from disk."""
+    root = _root() / ds / "costs"
+    models = sorted(p for p in root.iterdir() if (p / "cost_model.json").exists()) if root.exists() else []
+    if not models:
+        raise HTTPException(404, f"No cost model for {ds}. Run: ci-costs build")
+    return models[-1]
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/costs/{dataset}")
+def costs(dataset: str) -> dict[str, Any]:
+    cm = _cost_model_dir(_resolve(dataset))
+    doc = _read_json(cm / "cost_model.json")
+    keep = (
+        "cost_model_id",
+        "model_version",
+        "dataset_id",
+        "broker",
+        "broker_server",
+        "built_utc",
+        "code_version",
+        "config_hash",
+        "tick_window",
+        "vol_tercile_edges",
+        "summary",
+        "execution",
+    )
+    return {k: doc[k] for k in keep} | {
+        "validation": _read_json(cm / "validation.json"),
+        "point": doc["symbol_spec"]["point"],
+        "contract_size": doc["symbol_spec"]["trade_contract_size"],
+    }
+
+
+@app.get("/api/costs/{dataset}/heatmap")
+def cost_heatmap(
+    dataset: str,
+    stat: CostStat = "p50",
+    vol: VolBucket = "all",
+    window: Literal["full", "current"] = "full",
+    basis: Literal["abs", "ratio"] = "abs",
+) -> dict[str, Any]:
+    """Spread by UTC hour × weekday. ``abs`` = points; ``ratio`` = multiple of the
+    minute's minimum spread (the time-of-day shape with the broker's tier removed)."""
+    if window == "current" and basis == "ratio":
+        raise HTTPException(422, "The current window is stored in points only (basis=abs)")
+    cm = _cost_model_dir(_resolve(dataset))
+    level = 1 if vol == "all" else 0
+    cells = (
+        pl.scan_parquet(cm / "spread_cells.parquet")
+        .filter(
+            (pl.col("basis") == basis)
+            & (pl.col("window") == window)
+            & (pl.col("level") == level)
+            & (pl.col("vol_bucket") == vol)
+        )
+        .select("hour_utc", "dow", "minutes", stat)
+        .collect()
+    )
+    lookup = {(r["dow"], r["hour_utc"]): r for r in cells.iter_rows(named=True)}
+    days = list(range(1, 8))  # ISO weekday, 1 = Monday
+    hours = list(range(24))
+
+    def grid(col: str) -> list[list[float | None]]:
+        return [[round(lookup[(d, h)][col], 4) if (d, h) in lookup else None for h in hours] for d in days]
+
+    return {
+        "stat": stat,
+        "vol": vol,
+        "window": window,
+        "basis": basis,
+        "unit": "points" if basis == "abs" else "x minute minimum",
+        "days": days,
+        "hours": hours,
+        "values": grid(stat),
+        "minutes": grid("minutes"),
+    }
+
+
+@app.get("/api/costs/{dataset}/levels")
+def cost_levels(dataset: str) -> dict[str, Any]:
+    """Daily spread level over the whole history (median of each M1 bar's minimum
+    spread) and, inside the tick window, the time-weighted measured mean."""
+    cm = _cost_model_dir(_resolve(dataset))
+    df = pl.read_parquet(cm / "level_daily.parquet").sort("day")
+    # Full trading days only: Sunday-evening and holiday stub sessions (~1 h of bars,
+    # spreads up to 10x) are real but would hide the tier history behind a few spikes.
+    df = df.filter(pl.col("bars") >= 0.5 * pl.col("bars").median())
+    return {
+        "stub_days_excluded": True,
+        "time": df["day"].cast(pl.Datetime("us")).dt.epoch("s").to_list(),
+        "level_median": df["level_median"].to_list(),
+        "measured_mean": [None if v is None else round(v, 2) for v in df["measured_mean"].to_list()],
+    }
+
+
 def main() -> None:
     import uvicorn
 

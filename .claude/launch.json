@@ -10,8 +10,14 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "C:\\Gold_Intelligence_AI\\apps\\web", "run", "dev"],
-      "port": 3000
+      "runtimeArgs": [
+        "--prefix",
+        "C:\\Gold_Intelligence_AI\\apps\\web",
+        "run",
+        "dev"
+      ],
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

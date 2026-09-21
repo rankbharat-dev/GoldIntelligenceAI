@@ -145,10 +145,16 @@ def infer_clock(m1: pl.DataFrame) -> ClockModel:
 
 def to_utc(df: pl.DataFrame, clock: ClockModel, ts_col: str = "ts_server") -> pl.DataFrame:
     """Add ``ts_utc`` = ts_server − weekly offset. Keeps ts_server for traceability."""
+    return apply_weekly_offsets(df, clock.weekly, ts_col)
+
+
+def apply_weekly_offsets(df: pl.DataFrame, weekly: pl.DataFrame, ts_col: str = "ts_server") -> pl.DataFrame:
+    """``to_utc`` with a persisted weekly table (``clock_weekly.parquet`` of a derived
+    dataset), so later stages reuse the dataset's clock instead of re-inferring it."""
     return (
         df.with_columns(iso_year=pl.col(ts_col).dt.iso_year(), iso_week=pl.col(ts_col).dt.week())
         .join(
-            clock.weekly.select("iso_year", "iso_week", "offset_hours"),
+            weekly.select("iso_year", "iso_week", "offset_hours"),
             on=["iso_year", "iso_week"],
             how="left",
         )

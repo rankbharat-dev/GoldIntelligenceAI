@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { AppNav } from "@/components/app-nav";
 import { CandleChart, type DisplayZone } from "@/components/candle-chart";
 import { DataHealth } from "@/components/data-health";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,6 +26,8 @@ export default function ChartViewerPage() {
           <h1 className="text-sm font-semibold tracking-tight">Candle Intelligence</h1>
           <p className="text-xs text-muted-foreground">XAUUSD · Chart Viewer · research data, not a trading terminal</p>
         </div>
+
+        <AppNav />
 
         <ToggleGroup
           variant="outline"
