@@ -5,6 +5,8 @@ import {
   createChart,
   createSeriesMarkers,
   HistogramSeries,
+  LineSeries,
+  LineStyle,
   TickMarkType,
   type CandlestickData,
   type HistogramData,
@@ -81,6 +83,17 @@ interface Props {
   markers?: ChartMarker[];
   /** Open the chart around this UTC epoch second instead of the latest bars. */
   anchor?: number | null;
+  /** Straight segments drawn over the candles (trendlines, S/R levels). */
+  overlays?: OverlayLine[];
+  /** Visible time window (UTC epoch s of the first and last visible bar), debounced. */
+  onRangeChange?: (from: number, to: number) => void;
+}
+
+export interface OverlayLine {
+  points: { time: number; value: number }[];
+  color: string;
+  width?: 1 | 2 | 3;
+  dashed?: boolean;
 }
 
 export interface ChartMarker {
@@ -93,13 +106,15 @@ export interface ChartMarker {
 
 const TF_SECONDS: Record<Timeframe, number> = { M1: 60, M5: 300, M15: 900, H1: 3600 };
 
-export function CandleChart({ timeframe, zone, selected = null, onSelect, markers, anchor = null }: Props) {
+export function CandleChart({ timeframe, zone, selected = null, onSelect, markers, anchor = null, overlays, onRangeChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const onSelectRef = useRef(onSelect);
+  const onRangeRef = useRef(onRangeChange);
+  const overlayRef = useRef<ISeriesApi<"Line">[]>([]);
   const barsRef = useRef<Bars>({ candles: [], volume: [], hasMore: true });
   const loadingRef = useRef(false);
   const tfRef = useRef(timeframe);
@@ -160,12 +175,86 @@ export function CandleChart({ timeframe, zone, selected = null, onSelect, marker
       chart.remove();
       chartRef.current = null;
       markersRef.current = null;
+      overlayRef.current = [];
     };
   }, []);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
+  useEffect(() => {
+    onRangeRef.current = onRangeChange;
+  }, [onRangeChange]);
+
+  // ---------------------------------------------------------------- overlay lines
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    for (const s of overlayRef.current) chart.removeSeries(s);
+    overlayRef.current = [];
+    const times = barsRef.current.candles.map((b) => b.time as number);
+    if (!times.length || !overlays?.length) return;
+    const step = TF_SECONDS[timeframe];
+    // Snap to the bar of this timeframe that contains t; points outside the loaded bars are dropped.
+    const snap = (t: number) => {
+      const x = t - (t % step);
+      let lo = 0;
+      let hi = times.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid] < x) lo = mid + 1;
+        else hi = mid;
+      }
+      if (lo === times.length) return x - times[lo - 1] < 3 * 86400 ? times[lo - 1] : null; // just past the newest bar
+      return times[lo] - x < 3 * 86400 ? times[lo] : null;
+    };
+    for (const ln of overlays) {
+      const pts: { time: UTCTimestamp; value: number }[] = [];
+      for (const p of ln.points) {
+        if (p.time < times[0]) continue;
+        const t = snap(p.time);
+        if (t == null) continue;
+        const last = pts[pts.length - 1];
+        if (last && (last.time as number) >= t) last.value = p.value;
+        else pts.push({ time: t as UTCTimestamp, value: p.value });
+      }
+      if (pts.length < 2) continue;
+      const s = chart.addSeries(LineSeries, {
+        color: ln.color,
+        lineWidth: ln.width ?? 1,
+        lineStyle: ln.dashed ? LineStyle.Dashed : LineStyle.Solid,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        autoscaleInfoProvider: () => null, // overlays never rescale the candles
+      });
+      s.setData(pts);
+      overlayRef.current.push(s);
+    }
+  }, [overlays, loadedCount, timeframe]);
+
+  // ---------------------------------------------------------------- visible range → parent
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onRange = (r: LogicalRange | null) => {
+      if (!r || !onRangeRef.current) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const c = barsRef.current.candles;
+        if (!c.length) return;
+        const a = c[Math.max(0, Math.min(c.length - 1, Math.floor(r.from)))].time as number;
+        const b = c[Math.max(0, Math.min(c.length - 1, Math.ceil(r.to)))].time as number;
+        onRangeRef.current?.(a, b + TF_SECONDS[tfRef.current]);
+      }, 350);
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+    return () => {
+      clearTimeout(timer);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
+    };
+  }, []);
 
   // ---------------------------------------------------------------- selected bar marker
   useEffect(() => {

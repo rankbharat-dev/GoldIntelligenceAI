@@ -87,9 +87,19 @@ def bar_keys(m1: pl.DataFrame, vol: pl.DataFrame, edges: tuple[float, float]) ->
 # ---------------------------------------------------------------- cells
 
 
-def keyed_histogram(hist: pl.DataFrame, keys: pl.DataFrame) -> pl.DataFrame:
-    """Attach cell keys to the tick histogram and express each quote as a ratio to
-    its minute's minimum spread."""
+def keyed_histogram(hist: pl.DataFrame, keys: pl.DataFrame, ratio_basis: str = "own_min") -> pl.DataFrame:
+    """Attach cell keys to the tick histogram and express each quote as a ratio.
+
+    ``own_min``: to its minute's minimum spread (the account the bars come from).
+    ``bar_level``: to the *bar dataset's* spread level of that minute — used when the
+    ticks come from another account (Exness Raw Spread) than the bars (the demo), so
+    that ``level × ratio`` prices the other account over the whole bar history."""
+    if ratio_basis == "bar_level":
+        return (
+            hist.join(keys.select("ts_utc", *KEYS, "spread_level"), on="ts_utc", how="inner")
+            .with_columns(ratio=(pl.col("spread_points") / pl.col("spread_level")).round(4))
+            .drop("spread_level")
+        )
     return (
         hist.join(keys.select("ts_utc", *KEYS), on="ts_utc", how="left")
         .with_columns(

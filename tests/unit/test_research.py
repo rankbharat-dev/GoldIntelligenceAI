@@ -97,7 +97,12 @@ def _doc(**p) -> dict:
         "ambiguity_rate": 0.01,
         "stability": {"year": {"score": 0.8}, "session": {"score": 0.75}},
     }
-    return {"results": {"pessimistic": base | p}, "deflated_sharpe": {"deflated_excess": 0.02, "n_trials": 5}}
+    return {
+        "results": {"pessimistic": base | p},
+        "deflated_sharpe": {"deflated_excess": 0.02, "n_trials": 5},
+        # promotion is judged on the calibrated Raw profile (Phase 9)
+        "lineage": {"cost_profile": "raw", "cost_profile_status": "validated"},
+    }
 
 
 def test_checklist_verdicts() -> None:
@@ -110,6 +115,11 @@ def test_checklist_verdicts() -> None:
     assert done["verdict"] == "candidate"
     weak_holdout = checklist.evaluate(_doc(), _doc(n=300), _doc(), _doc(expectancy_r=0.05), 1)
     assert weak_holdout["verdict"] == "rejected"  # below 50 % of development
+    demo_costs = _doc(n=1500) | {
+        "lineage": {"cost_profile": "demo_trial7", "cost_profile_status": "validated"}
+    }
+    on_demo = checklist.evaluate(_doc(), _doc(n=300), demo_costs, _doc(expectancy_r=0.09), 1)
+    assert on_demo["verdict"] == "pending" and not on_demo["ready_to_unseal"]  # wrong account's costs
 
 
 def test_stability_counts_only_profitable_buckets() -> None:

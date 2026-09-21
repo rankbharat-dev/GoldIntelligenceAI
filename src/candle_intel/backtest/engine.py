@@ -185,9 +185,14 @@ def simulate(
     scenario: str,
     sigs: pl.DataFrame,
     policy: AmbiguityPolicy = "pessimistic",
+    overlap: bool = False,
 ) -> pl.DataFrame:
     """Trades of one cost scenario on one tier (or an explicit [start, end) window
-    inside the development/validation tiers, for walk-forward folds)."""
+    inside the development/validation tiers, for walk-forward folds).
+
+    ``overlap=True`` labels every signal independently (event studies, blueprint §8.1
+    triple-barrier labels): same fills and costs, but no one-position-at-a-time rule.
+    Its USD equity path is meaningless; use the R columns."""
     sc = execution.SCENARIOS[scenario]
     start, end_t = window_of(mk, tier)
     t0 = _epoch(start)
@@ -299,7 +304,8 @@ def simulate(
             }
         )
         # Next decision strictly after this exit bar has opened.
-        free_from = int(mk.t[ex.i]) + 1
+        if not overlap:
+            free_from = int(mk.t[ex.i]) + 1
     return pl.DataFrame(rows, schema=TRADE_SCHEMA)
 
 

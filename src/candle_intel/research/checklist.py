@@ -9,6 +9,10 @@ Implementation reading (recorded in ARCHITECTURE §15 note, 2026-09-21):
 - Deflated Sharpe gate is the literal "> 0": per-trade Sharpe above the expected
   maximum of the family's trial count (SR − SR0 > 0). Its probability is shown too.
 - Holdout criteria stay *pending* until the family's one-time unseal.
+- Cost profile (MASTER_PROMPT §5, added 2026-09-21 with Phase 9, research note): promotion is
+  judged on the account that will trade — the **calibrated Raw** profile. On the demo or the
+  provisional Raw profile this item stays *pending*, and the holdout cannot be unsealed:
+  spending the one-time look on the wrong costs would waste it. Not a §15 threshold change.
 There is no partial promotion: any failure → rejected; any pending → not yet a candidate.
 """
 
@@ -138,14 +142,31 @@ def evaluate(
             None if holdout_accesses == 0 else holdout_accesses == 1,
         )
     )
+    lin = (ab or a or {}).get("lineage", {}) if (ab or a) else {}
+    prof, status = lin.get("cost_profile", "demo_trial7"), lin.get("cost_profile_status", "validated")
+    ok_prof = prof == "raw" and status == "validated"
+    items.append(
+        _item(
+            "cost_profile",
+            "Costs of the account that will trade (calibrated Raw profile)",
+            f"{prof} ({status})",
+            "raw, calibrated from Raw-account ticks",
+            True if ok_prof else None,
+            "" if ok_prof else "runs used a demo or provisional profile — calibrate Raw (open item A7)",
+        )
+    )
     fails = [i for i in items if i["passed"] is False]
     pending = [i for i in items if i["passed"] is None]
     verdict = "rejected" if fails else "pending" if pending else "candidate"
     ready_to_unseal = not fails and all(i["key"] in ("holdout", "holdout_accesses") for i in pending)
+    pre_holdout = not fails and all(
+        i["key"] in ("holdout", "holdout_accesses", "cost_profile") for i in pending
+    )
     return {
         "verdict": verdict,
         "items": items,
         "failed": len(fails),
         "pending": len(pending),
         "ready_to_unseal": ready_to_unseal,
+        "passes_pre_holdout": pre_holdout,
     }

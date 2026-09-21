@@ -1,11 +1,13 @@
 "use client";
 
 import { Blocks, Library, PenTool, Sparkles, type LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CandleChart, type DisplayZone } from "@/components/candle-chart";
 import { DataHealth } from "@/components/data-health";
 import { FeaturesPanel } from "@/components/features-panel";
+import { LayerToggles, StructureLegend, useStructure, type Layer } from "@/components/structure-layer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TIMEFRAMES, type Timeframe } from "@/lib/api";
@@ -18,30 +20,34 @@ const ZONES: Record<DisplayZone, string> = {
 
 // Strategy Lab entry points from the reference design. They show what each method will do
 // and which phase delivers it — never invented counts (requirement U2).
-const METHODS: { title: string; body: string; icon: LucideIcon; phase: number }[] = [
+const METHODS: { title: string; body: string; icon: LucideIcon; phase: number; href?: string }[] = [
   {
     title: "AI Strategy Discovery",
     body: "The engine proposes hypotheses, tests them on the data and keeps both accepted and rejected ones.",
     icon: Sparkles,
     phase: 8,
+    href: "/strategy-lab?mode=ai",
   },
   {
     title: "Visual Strategy Builder",
     body: "Entry conditions, filters, exits and sizing from forms — no code. Blocks later.",
     icon: Blocks,
     phase: 5,
+    href: "/strategy-lab",
   },
   {
     title: "Chart-Based Creator",
     body: "Mark a pattern on the chart; it becomes measurable rules you review before any test.",
     icon: PenTool,
     phase: 7,
+    href: "/strategy-lab?mode=chart",
   },
   {
     title: "Strategy Library",
     body: "Every spec, version and test result saved — continue or compare later.",
     icon: Library,
     phase: 5,
+    href: "/strategies",
   },
 ];
 
@@ -54,6 +60,10 @@ export default function OverviewPage() {
   const selectedTime = selected?.tf === tf ? selected.time : null;
 
   const onSelect = useCallback((time: number) => setSelected({ tf, time }), [tf]);
+  const [layers, setLayers] = useState<Set<Layer>>(() => new Set<Layer>(["levels", "lines"]));
+  const [range, setRange] = useState<[number, number] | null>(null);
+  const onRange = useCallback((a: number, b: number) => setRange([a, b]), []);
+  const structure = useStructure(range, layers);
 
   // On a phone the panel sits below the chart: bring it into view after a click.
   useEffect(() => {
@@ -102,9 +112,27 @@ export default function OverviewPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="relative h-[60dvh] min-h-[420px]">
-            <CandleChart timeframe={tf} zone={zone} selected={selectedTime} onSelect={onSelect} />
+          <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5">
+            <span className="text-[11px] text-muted-foreground">Structure (M5 geometry):</span>
+            <LayerToggles value={layers} onChange={setLayers} loading={structure.loading} />
+            {structure.error && <span className="text-[11px] text-red-400">{structure.error.message}</span>}
           </div>
+          <div className="relative h-[60dvh] min-h-[420px]">
+            <CandleChart
+              timeframe={tf}
+              zone={zone}
+              selected={selectedTime}
+              onSelect={onSelect}
+              markers={structure.markers}
+              overlays={structure.overlays}
+              onRangeChange={onRange}
+            />
+          </div>
+          {layers.size > 0 && (
+            <div className="border-t px-3 py-1.5">
+              <StructureLegend />
+            </div>
+          )}
         </section>
 
         <section aria-label="Strategy Lab" className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
@@ -121,9 +149,18 @@ export default function OverviewPage() {
                     <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{m.body}</p>
                   </div>
                 </div>
-                <p className="mt-auto rounded-md border border-dashed px-2 py-1.5 text-center text-[11px] text-muted-foreground">
-                  Arrives in Phase {m.phase}
-                </p>
+                {m.href ? (
+                  <Link
+                    href={m.href}
+                    className="mt-auto rounded-md border border-primary/40 px-2 py-1.5 text-center text-[11px] text-primary hover:bg-primary/10"
+                  >
+                    Open
+                  </Link>
+                ) : (
+                  <p className="mt-auto rounded-md border border-dashed px-2 py-1.5 text-center text-[11px] text-muted-foreground">
+                    Arrives in Phase {m.phase}
+                  </p>
+                )}
               </div>
             );
           })}

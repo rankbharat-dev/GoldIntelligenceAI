@@ -120,3 +120,18 @@ def cost_stress(r: np.ndarray, risk_pts: np.ndarray, point: float, contract_size
         "breakeven_extra_spread_points": round(mean / inv, 1) if inv > 0 else None,
         "breakeven_extra_commission_usd_per_lot": round(mean / inv * usd_per_pt_lot, 2) if inv > 0 else None,
     }
+
+
+def benjamini_hochberg(pvals: list[float], q: float = 0.10) -> list[dict[str, Any]]:
+    """Benjamini–Hochberg FDR (§9.3): adjusted q-value per p-value and whether it is a
+    discovery at level ``q``. Order of the output = order of the input."""
+    m = len(pvals)
+    if m == 0:
+        return []
+    p = np.asarray(pvals, dtype=float)
+    order = np.argsort(p)
+    ranked = p[order] * m / np.arange(1, m + 1)
+    adj = np.minimum.accumulate(ranked[::-1])[::-1].clip(max=1.0)
+    out = np.empty(m)
+    out[order] = adj
+    return [{"q_value": round(float(v), 5), "rejected": bool(v <= q)} for v in out]

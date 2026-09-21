@@ -1,6 +1,6 @@
 # Session Handoff — read this first
 
-Last updated: 2026-09-21 · End of Phase 6 · Owner communicates in Hinglish.
+Last updated: 2026-09-21 (late) · End of Phase 10 · Owner communicates in Hinglish.
 
 > **Goal, target dashboard and the revised roadmap live in [MASTER_PROMPT.md](MASTER_PROMPT.md)**
 > (owner decisions of 2026-09-21: strategy research workbench + AI Research Engine, 5 years
@@ -42,28 +42,34 @@ Governing spec: [ARCHITECTURE_v1.2.md](ARCHITECTURE_v1.2.md). Library choices:
 | Terminal safety | Algo Trading OFF; investor-password login not used (optional) |
 | Other terminal data | The MT5 data dir also holds Exness **real** account servers — never touch them |
 | PostgreSQL | Docker container `candle-intelligence-postgres` on **127.0.0.1:5434** (5433 belongs to another project, `staff-manager-pg`). Use `127.0.0.1`, not `localhost`: on this machine `localhost` tries IPv6 first and psycopg hangs |
-| LLM (AI Assistant API mode) | AgentRouter key in `.env` (`CI_LLM_*`), git-ignored. Not called by any code yet (Phase 10) |
+| LLM (AI Assistant API mode) | AgentRouter key in `.env` (`CI_LLM_*`), git-ignored. Used by `candle_intel/assistant/chat.py` (official `anthropic` SDK, `base_url` = router). On 2026-09-21 the router returned **402 budget exhausted** (open item A9) |
 | GitHub | https://github.com/rankbharat-dev/GoldIntelligenceAI — **public**; commits use `290257992+rankbharat-dev@users.noreply.github.com` |
 | Git policy | Commit / push only when the owner asks |
 
-## 4. What exists (Phases 0–6 complete)
+## 4. What exists (Phases 0–10 complete)
 
 | Component | Path | Command |
 |---|---|---|
 | MT5 gateway | `src/candle_intel/ingest/mt5_session.py` | — |
 | Ingestion CLI | `src/candle_intel/ingest/cli.py`, `bulk.py` | `ci-ingest status \| probe \| snapshot \| raw --ticks --tick-days 260` |
 | Data engine | `src/candle_intel/data/{clock,quality,aggregate,build}.py` | `ci-data build \| list` |
-| Cost model | `src/candle_intel/costs/{ticks,volatility,spread,execution,validate,build}.py` | `ci-costs build \| list` |
+| Cost model | `src/candle_intel/costs/{ticks,volatility,spread,execution,validate,build,profiles}.py` — account profiles `demo_trial7` / `raw` | `ci-costs build [--profile raw --raw-ticks <id>] \| provisional-raw \| list` |
 | Feature store | `src/candle_intel/features/{registry,compute,leakage,store,build}.py` | `ci-features build \| list \| show --time <UTC>` |
-| Strategy spec | `src/candle_intel/strategy/{spec,signals}.py` | — |
+| Structure (Phase 7) | `src/candle_intel/structure/geometry.py` — swings, S/R, trendlines, channels, breaks, retests, sweeps; 38 feature columns + chart detections | via `ci-features build` / `/api/structure` |
+| Strategy spec | `src/candle_intel/strategy/{spec,signals,drafts}.py` (drafts = Chart-Based Creator) | — |
 | Backtester | `src/candle_intel/backtest/{market,split,engine,metrics}.py` | via API jobs |
 | Research layer | `src/candle_intel/research/{ledger,runs,optimize,validate,checklist,jobs}.py`, `statistics/robust.py` | via API jobs |
+| Behaviours + studies (Phase 7) | `research/{behaviours,events,studies}.py` — 18 pre-registered V1 behaviours in `ci.pattern_definitions`, triple-barrier event studies, BH-FDR screen | Behaviour Explorer |
+| Research engine (Phase 8) | `research/discovery.py` — searches + hypotheses in `ci.research_searches` / `ci.research_hypotheses` | Research Pipeline |
+| ML filter (Phase 10) | `src/candle_intel/ml/filter.py` (LightGBM; models in `storage/research/models/`) | ML Lab |
+| AI Assistant (Phase 10) | API mode `src/candle_intel/assistant/chat.py`; no-API mode MCP `services/api/ci_api/research_mcp.py` (in `.mcp.json` as `candle-intelligence-research`) | AI Assistant page / Claude Code |
 | Metadata DB | `src/candle_intel/db.py`, `infra/postgres/init/001_schema.sql`; research ledger tables (`research_specs/trials/runs/jobs`, `holdout_access_log`) created by `research/ledger.py` | `docker compose up -d` |
-| Research API | `services/api/ci_api/main.py` + `research.py` (specs, preview, runs, trades, jobs, holdout) | `ci-api` → :8000 (restart after backend changes — no auto-reload) |
+| Research API | `services/api/ci_api/main.py` + `research.py` (specs, preview, runs, trades, jobs, holdout, cost jobs) + `explore.py` (structure, distributions, behaviours, studies, chart drafts) + `pipeline.py` (searches, candidates) + `assistant.py` (chat, ML jobs) | `ci-api` → :8000 (restart after backend changes — no auto-reload) |
 | MCP server | `services/mt5_mcp/ci_mt5_mcp/server.py`, `.mcp.json` | stdio |
-| Web app | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5): `/` Overview, `/costs` Data Center, `/strategy-lab`, `/backtest`, `/optimize`, `/validate`, `/strategies`; job tray in the header | `npm --prefix apps/web run dev` → :3000 |
-| Preview pair | `.claude/launch.json` `api-preview` (:8001) + `web-preview` (`CI_NEXT_DIST=.next-preview`, proxies to :8001) — lets a session test next to the owner's own :3000/:8000 servers | preview tools |
-| Tests | `tests/{unit,leakage,integration}`, shared synthetic gold-calendar history in `tests/conftest.py` | `pytest` (109 pass + 2 with `-m mt5`) |
+| Web app | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5): `/` Overview (structure overlays), `/costs` Data Center (cost profiles), `/explorer` Behaviour Explorer, `/strategy-lab` (Visual Builder, AI Discovery, Chart-Based Creator), `/backtest`, `/optimize`, `/validate`, `/pipeline` Research Pipeline, `/strategies` (+ candidates leaderboard), `/ml` ML Lab, `/assistant` AI Assistant; job tray in the header | `npm --prefix apps/web run dev` → :3000 |
+| Preview pair | `.claude/launch.json` `api-preview` (:8001) + `web-preview` (`CI_NEXT_DIST=.next-preview`), and `api-dev` (:8002) + `web-dev` (`.next-dev2`, :3200) — lets a session test next to the owner's own :3000/:8000 servers (the preview tool allows 5 servers per folder across all chats) | preview tools |
+| Tests | `tests/{unit,leakage,integration}`, shared synthetic gold-calendar history in `tests/conftest.py` | `pytest` (151 pass + 2 with `-m mt5`) |
+| Extra deps | `lightgbm`, `scikit-learn` (extras `ml`, `research`), `anthropic` (extra `assistant`) | `python -m uv sync --extra research --extra ml --extra assistant` |
 
 Data on disk (git-ignored, in `storage/`):
 - Raw `xauusd_exness-mt5trial7_20260921T071357Z`: M1 2021-07-01 → 2026-09-21 (1.84 M bars),
@@ -76,8 +82,13 @@ Data on disk (git-ignored, in `storage/`):
   `spread_source`, `spread_optimistic/base/pessimistic`, `atr_points`, `vol_bucket`,
   `in_rollover_window`, `abnormal_spread`, `level_imputed`), `spread_cells`,
   `measured_minutes`, `level_daily`, `validation.json`, `cost_model.json`; row in `ci.cost_models`.
-  (An earlier dirty-tree build `..._c20260921T074047Z` also exists; the API serves the newest.)
-- Feature set `exness-mt5trial7_f20260921T091144Z` in `<derived>/features/`: `features_M5.parquet`
+  (An earlier dirty-tree build `..._c20260921T074047Z` also exists.) Profile `demo_trial7`, validated.
+- Cost model `exness-mt5trial7_raw_c20260921T121723Z`: profile `raw`, status **provisional** — demo spread
+  tables copied as an upper bound + USD 10 / lot round turn (owner). Active profile for new runs:
+  `storage/research/cost_profile.json` (default `demo_trial7`; switch in Data Center).
+- Feature set **`exness-mt5trial7_f20260921T114037Z`** (`features/2`, 135 columns = 7 meta + 128 features incl.
+  38 structure columns; leakage self-check passed at 5 cut points; config hash `cce2f35d203d1f34`) — the
+  one every run uses now. Older: feature set `exness-mt5trial7_f20260921T091144Z` in `<derived>/features/`: `features_M5.parquet`
   (369,659 rows × 97 columns: 7 meta + 90 features) + `feature_set.json` (schema, config hash
   `c0caee76c8d123b8`, leakage self-check **passed** at 5 cut points, summary, SHA-256
   `ee4c8554…`). Built from a dirty tree before the Phase-3 commit; rebuild after committing
@@ -193,6 +204,40 @@ Design: blueprint §9 "Implementation note — 2026-09-21 (Phases 4–6)". Owner
 
 **The owner's :8000 API was started before Phases 4–6** — restart it (`ci-api`) so the new
 pages work on :3000.
+
+## 6e. Phases 7–10 (done 2026-09-21 late) — requirement `requirements/2026-09-21_phases-7-10.md`
+
+Design notes: blueprint "Implementation note — 2026-09-21 (Phases 7–10)" (after §13).
+
+- **Phase 7 — structure & patterns.** `structure/geometry.py` (swings K=5 confirmed 5 bars
+  later, S/R clusters, trendlines/channels, breakout/retest/failed, sweeps, H1 swing state) →
+  38 new conditionable features (`features/2`); overlays on the Overview chart (toggle Swings /
+  S/R / Trendlines / Events); **Behaviour Explorer** `/explorer` (pre-registered library with
+  tier A/B studies, BH-FDR screen, ad-hoc event study on tier A, feature distributions by
+  year/session/regime/tier); **Chart-Based Creator** (Strategy Lab → mark a bar before tier C
+  → tick measurable facts → Visual Builder). 18 V1 behaviours registered in
+  `ci.pattern_definitions` (research note 2: 6 were looked at on tier A before registration).
+  **Result:** tier-A screen — 0 of 18 behaviours survive FDR, before or after costs.
+- **Phase 8 — research engine.** `research/discovery.py` + **Research Pipeline** `/pipeline`,
+  Strategy Lab → AI Discovery, candidates leaderboard in My Strategies. Approve-first or
+  unattended; pause/resume; trial counter and the SR0 "luck bar". Exit test passes (planted edge
+  found, noise rejected). **Result:** first search, 120 hypotheses (16 behaviours × sessions ×
+  H1 alignment × exits): all rejected at the tier-A screen; best +0.03 R with only 147 trades;
+  SR0 at 120 trials = 0.117.
+- **Phase 9 — Raw account costs.** Profiles in `costs/profiles.py`; Data Center card with the
+  switch, "Rebuild provisional Raw" and "Calibrate Raw" (needs A7 ticks, ingested with
+  `--account-label raw`). Calibration tested on synthetic Raw ticks (ratio to the demo level,
+  zero spreads kept, validation passes). §15 checklist gained a "cost profile" item (research
+  note 3): pending until the calibrated Raw profile is used, and the holdout cannot be unsealed
+  before that.
+- **Phase 10 — ML + AI Assistant.** ML Lab `/ml` (LightGBM filter trained on tier A, judged on
+  tier B; exit test passes). **Result:** three-candle reversal + filter: +0.042 R on B
+  (−0.197 → −0.155 R, AUC 0.52) — better, still losing. AI Assistant `/assistant`: API chat
+  (router budget exhausted — A9) and no-API mode via the `candle-intelligence-research` MCP
+  server (pinned tool list; cannot unseal, approve or see tier C).
+
+**Restart the owner's API (`ci-api`, :8000)** — it predates Phases 7–10 (new routers, new
+feature set, profiles). The web app on :3000 hot-reloads.
 
 ## 7. Start-of-session checklist
 

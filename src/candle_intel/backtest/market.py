@@ -19,6 +19,7 @@ import polars as pl
 
 from candle_intel.backtest.split import Split, load_or_freeze
 from candle_intel.config import get_settings
+from candle_intel.costs import profiles
 from candle_intel.costs.execution import Commission
 from candle_intel.features.store import FEATURES_FILE, MANIFEST_FILE
 
@@ -46,6 +47,8 @@ class Market:
     in_window: np.ndarray  # bool: rollover window (stop slippage widens)
     weekend_flat: np.ndarray  # bool: Friday ≥ 16:50 NY
     features_path: Path
+    cost_profile: str = "demo_trial7"
+    cost_status: str = "validated"
     spread_px: dict[str, np.ndarray] = field(default_factory=dict, repr=False)  # scenario → price units
     _feature_cache: dict[tuple[str, ...], pl.DataFrame] = field(default_factory=dict, repr=False)
 
@@ -136,11 +139,14 @@ def _newest(root: Path, marker: str) -> Path:
     return items[-1]
 
 
-@lru_cache(maxsize=2)
-def load(dataset_dir: Path) -> Market:
-    """The newest cost model and feature set of a dataset, with the frozen split."""
+@lru_cache(maxsize=4)
+def load(dataset_dir: Path, profile: str = profiles.DEFAULT_PROFILE) -> Market:
+    """The newest cost model of ``profile`` and the newest feature set of a dataset,
+    with the frozen split."""
     manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
-    cm = _newest(dataset_dir / "costs", "cost_model.json")
+    cm = profiles.newest(dataset_dir, profile)
+    if cm is None:
+        raise FileNotFoundError(f"no cost model for profile {profile!r} (ci-costs build / provisional-raw)")
     fs = _newest(dataset_dir / "features", MANIFEST_FILE)
     cm_doc = json.loads((cm / "cost_model.json").read_text(encoding="utf-8"))
     c = cm_doc["execution"]["commission"]
@@ -168,6 +174,7 @@ def load(dataset_dir: Path) -> Market:
         (manifest["dataset_id"], cm.name, fs.name),
     )
     mk.features_path = fs / FEATURES_FILE
+    mk.cost_profile, mk.cost_status = profiles.profile_of(cm_doc)
     return mk
 
 

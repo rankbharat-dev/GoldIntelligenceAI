@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { LevelChart } from "@/components/costs/level-chart";
+import { ProfilesCard } from "@/components/costs/profiles-card";
 import { SpreadHeatmap } from "@/components/costs/spread-heatmap";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -227,7 +228,13 @@ export default function CostsPage() {
       <div className="px-4 pt-3">
         <h1 className="text-base font-semibold">Data Center · Costs</h1>
         <p className="text-xs text-muted-foreground">Spread, slippage, swap — what an edge must survive</p>
+        {m && (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Showing profile <span className="font-mono text-foreground">{m.profile}</span> ({m.profile_status}) · {m.spread_basis}
+          </p>
+        )}
       </div>
+      <ProfilesCard />
 
       {error && (
         <div className="p-4">

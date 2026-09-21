@@ -16,7 +16,7 @@ execution. Independent of Shiibaa.
 
 ## Status
 
-**Phases 1–6 (data engine, cost model, feature store, strategy spec + backtester, Strategy Lab / Backtest / Optimize / Validate) — built and running on Exness-MT5Trial7 (demo).**
+**Phases 1–10 (data engine, cost model + account profiles, feature store + market structure, strategy spec + backtester, Strategy Lab / Backtest / Optimize / Validate, Behaviour Explorer, research engine, ML Lab, AI Assistant) — built and running on Exness-MT5Trial7 (demo).**
 
 | Piece | State |
 |---|---|
@@ -28,7 +28,7 @@ execution. Independent of Shiibaa.
 | Backtester | Strategy spec (`strategy-spec/1`), event-driven engine (M5 decisions, M1 fills, 3 cost scenarios), frozen A/B/C split with a sealed holdout, trial counting per family, Deflated Sharpe, bootstrap, Monte Carlo, cost stress, walk-forward, §15 checklist |
 | Web app (`apps/web`) | Dark-gold research workspace: Overview (chart + features panel), Data Center (costs), Strategy Lab (visual builder), Backtest, Optimize, Validate, My Strategies, job tray |
 
-Next: Phase 7 — structure & patterns, Behaviour Explorer, Chart-Based Creator (see [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) §8).
+Next: Phase 11 — paper trading (see [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) §8, §11). Owner items: Raw Spread demo ticks (A7), AgentRouter budget (A9).
 
 ## Setup (Windows)
 
@@ -38,6 +38,7 @@ Docker Desktop.
 ```powershell
 python -m uv sync                      # core + dev tools
 python -m uv sync --extra research     # + scikit-learn, arch, plotly   (Phase 4+)
+python -m uv sync --extra research --extra ml --extra assistant   # + LightGBM (ML Lab), anthropic (AI Assistant API mode)
 copy .env.example .env                 # then edit; never commit .env
 docker compose up -d                   # PostgreSQL 17 on 127.0.0.1:5434
 ```

@@ -171,7 +171,9 @@ def cmd_raw(args: argparse.Namespace) -> int:
     from candle_intel.ingest import bulk
 
     since = datetime.fromisoformat(args.since) if args.since else None
-    root = bulk.ingest(since=since, with_ticks=args.ticks, tick_days=args.tick_days)
+    root = bulk.ingest(
+        since=since, with_ticks=args.ticks, tick_days=args.tick_days, account_label=args.account_label
+    )
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     summary = {
         "raw_version": manifest["raw_version"],
@@ -205,6 +207,11 @@ def main(argv: list[str] | None = None) -> int:
     raw.add_argument("--since", help="server-clock date; default = earliest M1 the terminal serves")
     raw.add_argument("--ticks", action="store_true", help="also pull bid/ask ticks")
     raw.add_argument("--tick-days", type=int, help="limit ticks to the last N days")
+    raw.add_argument(
+        "--account-label",
+        choices=["standard", "raw"],
+        help="account type of the logged-in account (raw = Exness Raw Spread demo, for the Raw cost profile)",
+    )
     raw.set_defaults(fn=cmd_raw)
     args = p.parse_args(argv)
     try:

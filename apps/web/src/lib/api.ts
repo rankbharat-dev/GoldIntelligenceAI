@@ -96,6 +96,9 @@ export interface ModelScore {
 type ScenarioMeans = Record<ScenarioName, number>;
 
 export interface CostModelSummary {
+  profile?: string;
+  profile_status?: string;
+  spread_basis?: string;
   cost_model_id: string;
   model_version: string;
   dataset_id: string;

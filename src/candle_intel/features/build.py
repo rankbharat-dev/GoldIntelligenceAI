@@ -26,7 +26,8 @@ from typing import Any
 
 import polars as pl
 
-from candle_intel.costs.build import cost_models, derived_root, latest_dataset
+from candle_intel.costs import profiles
+from candle_intel.costs.build import derived_root, latest_dataset
 from candle_intel.features import leakage
 from candle_intel.features.compute import CONFIG, FEATURE_VERSION, Bars, compute_features
 from candle_intel.features.registry import FEATURES, GROUPS
@@ -137,8 +138,7 @@ def build(dataset_dir: Path, run_selfcheck: bool = True) -> Path:
     manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
     point = float(manifest["symbol_spec"]["point"])
     research_start = datetime.fromisoformat(manifest["research_window_utc"][0])
-    costs = cost_models(dataset_dir)
-    cost_dir = costs[-1] if costs else None
+    cost_dir = profiles.newest(dataset_dir)  # the bars' own (demo) account
 
     bars = load_bars(dataset_dir)
     features = compute_features(bars, point, research_start)

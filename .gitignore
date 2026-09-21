@@ -18,6 +18,8 @@ storage/models/
 storage/experiments/
 storage/reports/
 storage/research/runs/
+storage/research/models/
+storage/research/cost_profile.json
 mlruns/
 
 # node

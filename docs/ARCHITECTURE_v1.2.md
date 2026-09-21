@@ -630,6 +630,75 @@ bar are flagged and reported separately.
 channels → ranges → breakout/retest → sweeps → complex formations. Do not begin a stage
 until the previous one passes its regression tests.
 
+### Implementation note — 2026-09-21 (Phases 7–10: `structure/`, `research/{behaviours,events,studies,discovery}.py`, `costs/profiles.py`, `ml/`, `assistant/`)
+
+**Structure (§13, Phase 7)** — `structure/geometry.py`, `structure/1`. Swing points: a bar
+strictly above (below) the K = 5 bars before it and not exceeded by the 5 after; it is
+*confirmed* at the close of bar i + 5, which is its `available_at`. S/R levels: swings of the
+last 1,152 bars (max 60), clustered within 0.35 ATR (a cluster never wider than that — no
+chaining), ≥ 2 touches, re-drawn only at a swing confirmation with that bar's ATR.
+Trendlines: through the last two higher swing lows (up) / lower swing highs (down), anchors
+≤ 576 bars apart, ended by a close through the line, the next confirmation, or 576 bars of
+age; channel = the parallel through the farthest opposite swing since the first anchor.
+Breakout = first close beyond the last swing; retest (≤ 24 bars, within 0.25 ATR, holds);
+failed breakout (first close back within 12 bars); liquidity sweep = wick beyond the last
+swing, close back inside. H1 swing state (K = 3) joined as-of like other H1 context.
+38 new columns (group `structure`) → the feature set is `features/2`; every one is a Strategy
+Lab condition. Leakage: the full suite covers them (recomputation on truncated history,
+perturbation) and passed on the real history (feature set `…_f20260921T114037Z`); a direct
+prefix test and brute-force references pin the rules; `geometry.detect()` returns the same
+detections with exact bar times / prices for the chart overlays. Detections spanning a
+weekend gap are *not* yet reported separately (§13 last paragraph) — open.
+
+**Behaviours, pre-registration, event studies (§8.1, §9.2, §17, Phase 7)** — 18 V1
+behaviours (8 §17 groups × long/short) are written to the blueprint's `pattern_definitions`
+table (pattern_id + version; a changed rule is a new version) before their studies run.
+Research note 2 records that 6 of them were looked at on tier A once during a smoke test before
+registration. Event study = every occurrence labelled with the triple barrier through
+`engine.simulate(overlap=True)` (same fills and costs as backtests), baseline = the same
+labels on all eligible bars, stationary-bootstrap p-values, BH-FDR (q = 10 %) across the
+library, §11 sample verdict. Ad-hoc studies: tier A only (exploratory); tier B only for
+registered behaviours; tier C never. First screen on tier A: 0 of 18 behaviours are
+discoveries, before or after costs.
+
+**Research engine (§9, Phase 8)** — `research/discovery.py`. A search (blocks × sessions × vol
+regimes × H1 alignment × stops × targets × time exits; grid / random / evolutionary; trial
+and time budget) and all its hypotheses are written to `research_searches` /
+`research_hypotheses` before testing. Stage 1: tier A, pessimistic costs, one trial per
+hypothesis on the search's family; rejected with the reason (screen floor of trades,
+expectancy ≤ 0). Stage 2: top K run the full Validate (A, B, A∪B, walk-forward, DSR at the true
+count, §15 checklist); failed criteria are listed; nothing failed and only holdout / cost
+profile pending = candidate. Pause / resume through a control flag; state lives in the ledger,
+so interrupted searches resume. Exit test: a planted edge in synthetic data is the top
+hypothesis, holds on tier B and fails only sample-size criteria; noise gives no candidate.
+First real search (120 hypotheses): all rejected at the screen. The assistant's no-API tool
+surface is an MCP server (`ci_api.research_mcp`, pinned by a test): it can propose and run on
+A / B, never unseal, approve or read tier C.
+
+**Account cost profiles (§6, Phase 9)** — `costs/profiles.py`. `demo_trial7` (the bars' own
+account) and `raw` (Exness Raw Spread). Calibrated Raw = the Raw demo's ticks as a ratio to the
+demo bars' spread level in the same minutes (`keyed_histogram(..., "bar_level")`, zero spreads
+kept), priced over the whole history as level × ratio and validated with the Phase 2
+acceptance test. Until those ticks exist (A7), a *provisional* Raw profile = demo spreads
+(upper bound) + the owner's USD 10 / lot round turn. The active profile (Data Center switch) is
+used by new runs and recorded in each run's lineage. §15 checklist: new item "costs of the
+account that will trade" — pending unless the run used the calibrated Raw profile; the holdout
+cannot be unsealed before it passes (research note 3; no threshold changed).
+
+**ML filter (§8.3, §14.1, Phase 10)** — `ml/filter.py`, LightGBM with fixed parameters and seed.
+Labels: every tier-A signal of a base spec, its own exits, pessimistic costs. Features: the
+decision bar's row (categoricals as fixed codes). Threshold from out-of-fold predictions on A
+(chronological folds, 1-day embargo). Test: rule vs rule + filter on tier B through the
+event-driven engine. "Helps" needs ≥ +0.02 R, ≥ 100 trades and a CI above the rule; the report
+also says whether the filtered rule is profitable. Counted as a trial. First real run
+(three-candle reversal): +0.042 R on B (−0.197 → −0.155 R), AUC 0.52 — better, still losing.
+
+**AI Assistant API mode (Phase 10)** — `assistant/chat.py`: official `anthropic` SDK with
+`base_url` = `CI_LLM_BASE_URL`, model `claude-opus-5`; sends the question, recent turns, the
+feature catalogue and attached tier A/B results or specs (never keys or tier C); a proposed
+spec is validated by the engine and only opened in the builder. Server-side fallback betas are
+not sent (third-party router).
+
 ---
 
 ## 14. Backend, Frontend and Storage Blueprint
@@ -821,8 +890,10 @@ an edge at all.
 | A1c | Log in with the **investor password** and switch **Algo Trading off** | Before any live session |
 | A2 | ~~Broker~~ — resolved: Exness Technologies Ltd, Exness-MT5Trial7 (demo) | — |
 | A3 | ~~Coverage probe~~ — tool built (`ci-ingest probe`); re-run on the real broker after A1b | Phase 1 |
-| A4 | Confirm commission per lot and current swap values for the account type. Until confirmed, the pessimistic scenario charges $7/lot round turn (`ci-costs build --commission-per-lot X --commission-confirmed` once known) | Phase 7 |
+| A4 | ~~Commission~~ — owner, 2026-09-21: Exness Raw **USD 10 per lot round turn** (used by the Raw profile). Still to confirm from the Raw account's contract specification whether it is per side or round turn; swap values for the Raw account come with A7 | Phase 9 |
 | A5 | Economic-news calendar for widened stop slippage (hook exists: `slippage_points(in_window=...)`; only the rollover window is flagged today) | Phase 7 |
 | A6 | Refit slippage parameters from simulated-vs-live fills | Phase 9 |
-| A7 | Owner will trade on an **Exness Raw Spread** account (2026-09-21). Open a Raw Spread demo so its ticks calibrate a Raw cost profile; promotion uses that profile. Roadmap order revised in `docs/MASTER_PROMPT.md` | Raw cost profile |
-| A8 | Holiday / early-close calendar so the last bars before an early close (≈ 17 of 274 weeks) are flagged like `hyg_week_last3`; can share a source with A5. Not yet built — the backtester's flat-before-weekend rule uses the regular Friday 16:50 NY only | Phase 7 |
+| A7 | Owner will trade on an **Exness Raw Spread** account. Open a Raw Spread **demo**, log in the terminal, run `ci-ingest raw --ticks --tick-days 260 --account-label raw`, then Data Center → Calibrate Raw (or `ci-costs build --profile raw --raw-ticks <raw_version> --commission-per-lot 10 --commission-confirmed`). Code ready (Phase 9); until then the Raw profile is provisional and nothing can promote | Raw cost profile |
+| A8 | Holiday / early-close calendar so the last bars before an early close (≈ 17 of 274 weeks) are flagged like `hyg_week_last3`; can share a source with A5. Not yet built — the backtester's flat-before-weekend rule uses the regular Friday 16:50 NY only | open (not built in Phase 7) |
+| A9 | AgentRouter budget: the router returned 402 "budget pool quota exhausted" on 2026-09-21 — top up so the dashboard chat (API mode) works; no-API mode works without it | Phase 10 |
+| A10 | Detections spanning a weekend gap or the rollover bar are not yet flagged separately (§13) | later |

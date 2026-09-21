@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { inputCls, Notice, PageHeader, Section, Stat } from "@/components/research/bits";
-import { fmtDate, fmtInt, research, type SpecRow } from "@/lib/research";
+import { fmtDate, fmtInt, fmtR, pipeline, research, type SpecRow } from "@/lib/research";
 import { cn } from "@/lib/utils";
 
 function describe(s: SpecRow) {
@@ -24,6 +24,7 @@ export default function StrategiesPage() {
   const qc = useQueryClient();
   const lib = useQuery({ queryKey: ["strategies"], queryFn: research.strategies });
   const ov = useQuery({ queryKey: ["overview"], queryFn: research.overview });
+  const board = useQuery({ queryKey: ["candidates"], queryFn: pipeline.candidates });
   const [filter, setFilter] = useState("");
   const [onlyFav, setOnlyFav] = useState(false);
 
@@ -48,6 +49,58 @@ export default function StrategiesPage() {
           <Stat label="Holdouts used" value={fmtInt(ov.data.families.filter((f) => f.holdout_used).length)} hint="one per family, ever" />
         </div>
       )}
+
+      <Section
+        title="Candidates leaderboard"
+        description="Latest Validate verdict of every validated strategy (§15). Candidate = every criterion passed except the sealed holdout; rejected = at least one failed."
+      >
+        {!board.data?.length ? (
+          <p className="text-xs text-muted-foreground">Nothing validated yet. Validate a strategy, or let the Research Pipeline validate its best hypotheses.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-xs">
+              <thead className="text-muted-foreground">
+                <tr className="text-left">
+                  <th className="py-1 pr-2 font-normal">Strategy</th>
+                  <th className="py-1 pr-2 font-normal">Verdict</th>
+                  <th className="py-1 pr-2 text-right font-normal">Failed / pending</th>
+                  <th className="py-1 pr-2 text-right font-normal">A∪B net R</th>
+                  <th className="py-1 pr-2 text-right font-normal">Walk-forward R</th>
+                  <th className="py-1 pr-2 text-right font-normal">Family trials</th>
+                  <th className="py-1 font-normal">By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {board.data.map((r) => (
+                  <tr key={r.spec_hash} className="border-t border-border/60">
+                    <td className="py-1 pr-2">
+                      <Link className="hover:underline" href={`/validate?run=${r.run_id}`}>
+                        {r.name ?? r.spec_hash}
+                      </Link>{" "}
+                      <span className="font-mono text-[10px] text-muted-foreground">{r.family}</span>
+                    </td>
+                    <td
+                      className={cn(
+                        "py-1 pr-2",
+                        r.verdict === "candidate" ? "text-emerald-300" : r.verdict === "rejected" ? "text-red-300" : "text-amber-200",
+                      )}
+                    >
+                      {r.verdict === "candidate" ? "✓ candidate" : r.verdict === "rejected" ? "✗ rejected" : "… pending"}
+                    </td>
+                    <td className="py-1 pr-2 text-right font-mono">
+                      {fmtInt(r.failed)} / {fmtInt(r.pending)}
+                    </td>
+                    <td className="py-1 pr-2 text-right font-mono">{fmtR(r.expectancy_r)}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{fmtR(r.oos_expectancy_r)}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{fmtInt(r.family_trials)}</td>
+                    <td className="py-1 text-muted-foreground">{r.created_by ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
 
       <Section
         title="Library"

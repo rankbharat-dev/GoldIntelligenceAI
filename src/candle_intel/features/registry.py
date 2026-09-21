@@ -9,6 +9,10 @@ becomes known (blueprint §7.1, §12).
     calendar   a function of the bar's timestamp (session, weekday) → known in advance
     htf_close  from the last *closed* M15 / H1 bar (its close <= available_at)
 
+Structure features (group ``structure``, Phase 7) use only swings confirmed by the
+row's close: a swing needs K bars after it, so it is known K bars late (see
+``candle_intel.structure.geometry``).
+
 Units: ``atr`` = multiples of ATR(14) of the previous M5 bars (scale-free across the
 2021 → 2026 price range), ``pts`` = broker points (0.001 USD), ``frac`` = 0..1 share.
 """
@@ -52,6 +56,7 @@ GROUPS = {
     "daily": "Daily context (NY 17:00 trading day)",
     "m15": "M15 context (last closed M15 bar)",
     "h1": "H1 context (last closed H1 bar)",
+    "structure": "Market structure (swings, S/R, trendlines, sweeps)",
     "spread": "Spread",
     "hygiene": "Hygiene flags (blueprint §5.3)",
 }
@@ -243,6 +248,177 @@ FEATURES: tuple[FeatureSpec, ...] = (
     # ------------------------------------------------------------ higher timeframes
     *_htf("m15_", "M15"),
     *_htf("h1_", "H1"),
+    # ------------------------------------------------------------ market structure (Phase 7)
+    _f("sw_hi_dist_atr", "structure", "atr", "bar_close", "Close minus the last confirmed swing high, ÷ ATR"),
+    _f("sw_lo_dist_atr", "structure", "atr", "bar_close", "Close minus the last confirmed swing low, ÷ ATR"),
+    _f("sw_hi_age", "structure", "bars", "bar_close", "Bars since that swing high's bar"),
+    _f("sw_lo_age", "structure", "bars", "bar_close", "Bars since that swing low's bar"),
+    _f(
+        "sw_trend",
+        "structure",
+        "sign",
+        "bar_close",
+        "Swing structure: +1 higher high & higher low, −1 lower high & lower low, 0 mixed",
+    ),
+    _f("rng_width_atr", "structure", "atr", "bar_close", "Last swing high − last swing low, ÷ ATR"),
+    _f("rng_pos", "structure", "frac", "bar_close", "Close between the last swing low (0) and high (1)"),
+    _f("sw_break_up", "structure", "bool", "bar_close", "First close above the last swing high (breakout)"),
+    _f("sw_break_down", "structure", "bool", "bar_close", "First close below the last swing low (breakdown)"),
+    _f(
+        "bars_since_break_up",
+        "structure",
+        "bars",
+        "bar_close",
+        "Bars since the last breakout (≤ 48, else empty)",
+    ),
+    _f(
+        "bars_since_break_down",
+        "structure",
+        "bars",
+        "bar_close",
+        "Bars since the last breakdown (≤ 48, else empty)",
+    ),
+    _f(
+        "retest_up",
+        "structure",
+        "bool",
+        "bar_close",
+        "Within 24 bars of a breakout: low back to the broken level (±0.25 ATR), close above it",
+    ),
+    _f(
+        "retest_down",
+        "structure",
+        "bool",
+        "bar_close",
+        "Within 24 bars of a breakdown: high back to the broken level, close below it",
+    ),
+    _f(
+        "failed_break_up",
+        "structure",
+        "bool",
+        "bar_close",
+        "First close back below the broken level within 12 bars of a breakout",
+    ),
+    _f(
+        "failed_break_down",
+        "structure",
+        "bool",
+        "bar_close",
+        "First close back above the broken level within 12 bars of a breakdown",
+    ),
+    _f(
+        "sweep_high",
+        "structure",
+        "bool",
+        "bar_close",
+        "Liquidity sweep: high above the last swing high, close back below it",
+    ),
+    _f(
+        "sweep_low",
+        "structure",
+        "bool",
+        "bar_close",
+        "Liquidity sweep: low below the last swing low, close back above it",
+    ),
+    _f("sweep_depth_atr", "structure", "atr", "bar_close", "How far the sweep went beyond the swing, ÷ ATR"),
+    _f(
+        "sr_above_dist_atr",
+        "structure",
+        "atr",
+        "bar_close",
+        "Nearest S/R level above the close (≥ 2 swing touches, last ~4 days), distance ÷ ATR",
+    ),
+    _f("sr_above_touches", "structure", "count", "bar_close", "Swing touches of that level above"),
+    _f(
+        "sr_below_dist_atr",
+        "structure",
+        "atr",
+        "bar_close",
+        "Nearest S/R level below the close, distance ÷ ATR",
+    ),
+    _f("sr_below_touches", "structure", "count", "bar_close", "Swing touches of that level below"),
+    _f(
+        "sr_above_high_dist_atr",
+        "structure",
+        "atr",
+        "bar_close",
+        "Level above minus the bar's high, ÷ ATR (< 0: the wick pierced resistance)",
+    ),
+    _f(
+        "sr_below_low_dist_atr",
+        "structure",
+        "atr",
+        "bar_close",
+        "The bar's low minus the level below, ÷ ATR (< 0: the wick pierced support)",
+    ),
+    _f(
+        "tl_up_dist_atr",
+        "structure",
+        "atr",
+        "bar_close",
+        "Close minus the rising trendline through the last two higher swing lows, ÷ ATR",
+    ),
+    _f("tl_up_slope_atr", "structure", "atr", "bar_close", "Slope of that line in ATR per hour"),
+    _f("tl_up_touches", "structure", "count", "bar_close", "Swing lows on that line (anchors included)"),
+    _f(
+        "tl_up_break",
+        "structure",
+        "bool",
+        "bar_close",
+        "Close below the rising trendline (the line ends here)",
+    ),
+    _f(
+        "tl_dn_dist_atr",
+        "structure",
+        "atr",
+        "bar_close",
+        "Close minus the falling trendline through the last two lower swing highs, ÷ ATR",
+    ),
+    _f("tl_dn_slope_atr", "structure", "atr", "bar_close", "Slope of that line in ATR per hour"),
+    _f("tl_dn_touches", "structure", "count", "bar_close", "Swing highs on that line (anchors included)"),
+    _f(
+        "tl_dn_break",
+        "structure",
+        "bool",
+        "bar_close",
+        "Close above the falling trendline (the line ends here)",
+    ),
+    _f(
+        "ch_up_pos",
+        "structure",
+        "frac",
+        "bar_close",
+        "Close in the rising channel (line + parallel through the top swing high): 0 floor, 1 roof",
+    ),
+    _f("ch_dn_pos", "structure", "frac", "bar_close", "Close inside the falling channel: 0 floor, 1 roof"),
+    _f(
+        "ch_width_atr",
+        "structure",
+        "atr",
+        "bar_close",
+        "Channel width ÷ ATR (rising channel if any, else falling)",
+    ),
+    _f(
+        "h1_sw_trend",
+        "structure",
+        "sign",
+        "htf_close",
+        "H1 swing structure (+1 HH & HL, −1 LH & LL, 0 mixed) from closed H1 bars",
+    ),
+    _f(
+        "h1_sw_hi_dist_atr",
+        "structure",
+        "atr",
+        "htf_close",
+        "M5 close minus the last confirmed H1 swing high, ÷ M5 ATR",
+    ),
+    _f(
+        "h1_sw_lo_dist_atr",
+        "structure",
+        "atr",
+        "htf_close",
+        "M5 close minus the last confirmed H1 swing low, ÷ M5 ATR",
+    ),
     # ------------------------------------------------------------ spread
     _f(
         "spread_pts",

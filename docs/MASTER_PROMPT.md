@@ -20,6 +20,7 @@ record them.
    hygiene, §6 costs (+ 2026-09-21 implementation note), §7 leakage, §9 multiple testing,
    §15 pre-committed success thresholds, Appendix A open items.
 4. `docs/requirements/` — the owner's own words, dated. Newest:
+   `2026-09-21_phases-7-10.md` (Phases 7–10, Raw commission USD 10/lot round turn),
    `2026-09-21_phases-4-6-and-hybrid-assistant.md` (hybrid AI Assistant, API key in `.env`),
    `2026-09-21_ui-redesign-research-workspace.md` (UI look + navigation, reference image
    `new_reference_image.png`), then `2026-09-21_strategy-research-engine.md`.
@@ -91,7 +92,7 @@ holdout, or drop costs to make a result look better.
 |---|---|
 | Data | Start with the 5 years available from Exness (2021-07 →). Add ~20 years later (candidate: Dukascopy ticks, ~2003 →), with an overlap check against Exness. Design datasets so multiple sources can coexist. |
 | Live account | Owner will trade on an **Exness Raw Spread** account: near-zero spread + commission. |
-| Cost model | Current model = demo `Exness-MT5Trial7` profile (spread ~90 pts). Add **account profiles**; build a **Raw** profile from a Raw Spread **demo** account's ticks + contract-spec commission. Promotion uses the profile of the account that will trade (Raw), and the pessimistic scenario must never be cheaper than what that account really charges. Until A4 is confirmed, pessimistic charges $7/lot round turn. |
+| Cost model | Current model = demo `Exness-MT5Trial7` profile (spread ~90 pts). Add **account profiles**; build a **Raw** profile from a Raw Spread **demo** account's ticks + contract-spec commission. Promotion uses the profile of the account that will trade (Raw), and the pessimistic scenario must never be cheaper than what that account really charges. Raw commission: **USD 10 / lot round turn** (owner, 2026-09-21). Until Raw-demo ticks exist (A7) the Raw profile is *provisional* (demo spreads as an upper bound) and cannot promote. Built in Phase 9 (`costs/profiles.py`). |
 | Strategy builder | Form-based first (dropdowns / fields), visual block editor later. |
 | Engine autonomy | Both modes: "engine suggests → owner approves" and unattended overnight runs, always inside §9/§15. |
 | UI | Every phase ships its own page; the owner must be able to do everything from the dashboard. |
@@ -104,9 +105,11 @@ holdout, or drop costs to make a result look better.
 
 Look and navigation follow `new_reference_image.png` (requirement 2026-09-21 night). The
 shell (sidebar, top bar, gold theme) exists; each page below lights up in its phase.
-Built so far: **Overview** (`/`), **Data Center** (`/costs`), **Strategy Lab · Visual Builder**
-(`/strategy-lab`), **Backtest** (`/backtest`), **Optimize** (`/optimize`), **Validate**
-(`/validate`), **My Strategies** (`/strategies`), job tray in the header.
+Built so far: **Overview** (`/`, structure overlays), **Data Center** (`/costs`, cost profiles),
+**Behaviour Explorer** (`/explorer`), **Strategy Lab** (`/strategy-lab`: Visual Builder, AI Discovery,
+Chart-Based Creator), **Backtest**, **Optimize**, **Validate**, **Research Pipeline** (`/pipeline`),
+**My Strategies** (+ candidates leaderboard), **ML Lab** (`/ml`), **AI Assistant** (`/assistant`),
+job tray in the header.
 
 | Sidebar item | Phase | Tools on it |
 |---|---|---|
@@ -151,10 +154,8 @@ Built so far: **Overview** (`/`), **Data Center** (`/costs`), **Strategy Lab · 
 
 ## 8. Roadmap (revised — replaces blueprint §16 order; exit conditions still apply)
 
-Status: Phases 0–6 **done** (foundation, data engine + Chart Viewer, cost model + Costs page,
-feature store + features panel, strategy spec + event-driven backtester, Strategy Lab +
-Backtest + My Strategies, jobs + Optimize + Validate with walk-forward and the sealed
-holdout — all 2026-09-21). Next: Phase 7.
+Status: Phases 0–10 **done** (2026-09-21; Phases 7–10 in HANDOFF §6e). Phase 9's Raw profile is
+code-ready but *provisional* until the owner supplies Raw-demo ticks (A7). Next: Phase 11.
 
 | # | Phase | Deliverable | UI shipped | Exit condition |
 |---|---|---|---|---|
@@ -194,8 +195,9 @@ needs ticks and the commission figure.
 
 | # | Item |
 |---|---|
-| A4 | Exness **Raw Spread** commission for XAUUSD (per lot, per side or round turn) — from the account's contract specification. |
-| A7 | Open an **Exness Raw Spread demo** account so its ticks can calibrate the Raw cost profile (log in with the investor password; Algo Trading off). |
+| A4 | Owner (2026-09-21): **USD 10 / lot round turn** on Exness Raw — in use. Confirm per side vs round turn from the Raw account's contract specification when A7 is done. |
+| A7 | Open an **Exness Raw Spread demo**, log in the terminal (investor password; Algo Trading off), run `ci-ingest raw --ticks --tick-days 260 --account-label raw`, then Data Center → Calibrate Raw. Until then nothing can promote. |
+| A9 | AgentRouter budget exhausted (402 on 2026-09-21) — top up for the dashboard chat. |
 | A1c | Investor-password login on the terminal (optional safety). |
 | A5 | Economic news calendar source for slippage windows (Phase 6+). |
 | A8 | Holiday / early-close calendar (≈ 17 of 274 weeks close early) — can share A5's source. |
@@ -203,17 +205,14 @@ needs ticks and the commission figure.
 
 ## 11. First task of the next session
 
-Phases 4–6 are done (HANDOFF §6d). Start **Phase 7 — Structure & Patterns**:
-- `src/candle_intel/structure/`: causal swing points (confirmed only after k bars — the
-  confirmation delay is the `available_at`), S/R levels (clustered swing prices with touch
-  counts), trendlines / channels (RANSAC on confirmed swings), liquidity sweeps (wick beyond
-  a prior swing, close back inside), first behaviours of blueprint §17 — each detection with
-  exact coordinates and `available_at`; all added to the feature store as new columns so
-  they become Strategy Lab conditions automatically.
-- Leakage suite extended to every structure feature (recomputation on truncated history).
-- UI: overlays on the Overview chart; **Behaviour Explorer** page (feature distributions by
-  year / session / regime + "what happened next" event study with costs); **Chart-Based
-  Creator** (mark a structure on the chart → spec draft).
-- Pre-register the first behaviours (§9.2) before looking at their outcomes.
-- A8 (early-close calendar) fits here.
-- Explain it to the owner in simple Hinglish when done.
+Phases 7–10 are done (HANDOFF §6e). Before new work: restart `ci-api` on :8000 and check the
+owner's open items (A7 Raw demo ticks, A9 AgentRouter budget) — if A7 arrived, calibrate the
+Raw profile first (Data Center → Calibrate Raw), switch the active profile to `raw`, and
+re-validate anything that was pending on costs.
+
+Then start **Phase 11 — Paper Trading**: a read-only live XAUUSD feed (the MT5 gateway's
+market-data allowlist only — no order functions), candidates' rules evaluated at each M5 close
+with the same feature code, simulated fills with the active cost profile, forward telemetry
+(signals, fills, slippage vs model, feature drift vs tier A) and a Paper Trading page;
+refit slippage (A6) from the observed spreads. §15 paper criteria: ≥ 60 trading days and ≥ 100
+signals. Explain it to the owner in simple Hinglish when done.

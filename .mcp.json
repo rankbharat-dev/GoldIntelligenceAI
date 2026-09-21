@@ -3,7 +3,21 @@
     "candle-intelligence-mt5": {
       "type": "stdio",
       "command": ".venv/Scripts/python.exe",
-      "args": ["-m", "ci_mt5_mcp.server"]
+      "args": [
+        "-m",
+        "ci_mt5_mcp.server"
+      ]
+    },
+    "candle-intelligence-research": {
+      "type": "stdio",
+      "command": ".venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "ci_api.research_mcp"
+      ],
+      "env": {
+        "CI_API_URL": "http://127.0.0.1:8000"
+      }
     }
   }
 }

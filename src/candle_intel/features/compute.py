@@ -29,8 +29,9 @@ from candle_intel.costs import volatility
 from candle_intel.costs.spread import NORM_BARS, ROLLOVER_WINDOW_NY
 from candle_intel.data.aggregate import aggregate
 from candle_intel.features.registry import META_COLUMNS, feature_names
+from candle_intel.structure import geometry as structure
 
-FEATURE_VERSION = "features/1"
+FEATURE_VERSION = "features/2"  # /2 (Phase 7): market-structure group
 
 BAR = timedelta(minutes=5)
 ATR_BARS = volatility.ATR_BARS
@@ -74,6 +75,7 @@ CONFIG = {
     "htf_atr_bars": HTF_ATR_BARS,
     "htf_sma_bars": HTF_SMA_BARS,
     "sessions": SESSIONS,
+    "structure": structure.CONFIG,
 }
 
 
@@ -380,6 +382,23 @@ def compute_features(bars: Bars, point: float, research_start: datetime | None =
                 )
             )
         )
+
+    # ------------------------------------------------------------ market structure (Phase 7)
+    df = df.sort("event_time")
+    df = df.join(structure.structure_features(df), on="event_time", how="left")
+    df = (
+        df.sort("available_at")
+        .join_asof(
+            structure.h1_structure(bars.h1),
+            left_on="available_at",
+            right_on="_h1s_close_utc",
+            strategy="backward",
+        )
+        .with_columns(
+            h1_sw_hi_dist_atr=(c - pl.col("_h1_sw_hi")) / atr,
+            h1_sw_lo_dist_atr=(c - pl.col("_h1_sw_lo")) / atr,
+        )
+    )
 
     # ------------------------------------------------------------ hygiene
     df = df.with_columns(

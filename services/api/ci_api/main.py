@@ -18,14 +18,18 @@ import polars as pl
 from fastapi import FastAPI, HTTPException, Query
 
 from candle_intel.config import get_settings
+from candle_intel.costs import profiles
 
-from . import research
+from . import assistant, explore, pipeline, research
 
 Timeframe = Literal["M1", "M5", "M15", "H1"]
 MAX_BARS = 5000
 
 app = FastAPI(title="Candle Intelligence API", version="0.2.0", docs_url="/docs")
 app.include_router(research.router)
+app.include_router(explore.router)
+app.include_router(pipeline.router)
+app.include_router(assistant.router)
 
 
 def _root() -> Path:
@@ -142,22 +146,64 @@ CostStat = Literal["p25", "p50", "p90", "p99", "mean"]
 VolBucket = Literal["all", "low", "mid", "high"]
 
 
-def _cost_model_dir(ds: str) -> Path:
-    """Newest cost model of a dataset (ci-costs build). Directory names come from disk."""
-    root = _root() / ds / "costs"
-    models = sorted(p for p in root.iterdir() if (p / "cost_model.json").exists()) if root.exists() else []
-    if not models:
-        raise HTTPException(404, f"No cost model for {ds}. Run: ci-costs build")
-    return models[-1]
+def _cost_model_dir(ds: str, profile: str | None = None) -> Path:
+    """Newest cost model of a dataset for a profile (default: the active one, falling
+    back to the demo account's). Directory names come from disk."""
+    want = profile or profiles.active()
+    if want not in profiles.PROFILES:
+        raise HTTPException(422, f"unknown cost profile {want!r}")
+    m = profiles.newest(_root() / ds, want) or (None if profile else profiles.newest(_root() / ds))
+    if m is None:
+        raise HTTPException(404, f"No {want} cost model for {ds}. Run: ci-costs build")
+    return m
 
 
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@app.get("/api/costs/profiles")
+def cost_profiles() -> dict[str, Any]:
+    """Account cost profiles of the newest dataset, which one new runs use, and which one
+    promotion requires (MASTER_PROMPT §5: the account that will trade)."""
+    ids = _dataset_ids()
+    if not ids:
+        raise HTTPException(404, "No datasets yet")
+    raw_archives = []
+    raw_root = get_settings().storage_root / "raw" / "xauusd"
+    for p in sorted(raw_root.iterdir()) if raw_root.exists() else []:
+        mf = p / "manifest.json"
+        if mf.exists():
+            m = json.loads(mf.read_text(encoding="utf-8"))
+            raw_archives.append(
+                {
+                    "raw_version": m["raw_version"],
+                    "server": m["session"]["broker_server"],
+                    "account_label": m["session"].get("account_label", "standard"),
+                    "tick_days": len(m.get("tick_chunks", [])),
+                }
+            )
+    return {
+        "dataset_id": ids[-1],
+        "active": profiles.active(),
+        "promotion_profile": profiles.PROMOTION_PROFILE,
+        "profiles": profiles.listing(_root() / ids[-1]),
+        "raw_archives": raw_archives,
+    }
+
+
+@app.post("/api/costs/profiles/active")
+def cost_profile_set(profile: str) -> dict[str, Any]:
+    ids = _dataset_ids()
+    try:
+        return profiles.set_active(profile, _root() / ids[-1])
+    except (ValueError, FileNotFoundError, IndexError) as e:
+        raise HTTPException(422, str(e)) from e
+
+
 @app.get("/api/costs/{dataset}")
-def costs(dataset: str) -> dict[str, Any]:
-    cm = _cost_model_dir(_resolve(dataset))
+def costs(dataset: str, profile: str | None = None) -> dict[str, Any]:
+    cm = _cost_model_dir(_resolve(dataset), profile)
     doc = _read_json(cm / "cost_model.json")
     keep = (
         "cost_model_id",
@@ -174,6 +220,9 @@ def costs(dataset: str) -> dict[str, Any]:
         "execution",
     )
     return {k: doc[k] for k in keep} | {
+        "profile": profiles.profile_of(doc)[0],
+        "profile_status": profiles.profile_of(doc)[1],
+        "spread_basis": doc.get("spread_basis", "measured on this account's ticks"),
         "validation": _read_json(cm / "validation.json"),
         "point": doc["symbol_spec"]["point"],
         "contract_size": doc["symbol_spec"]["trade_contract_size"],

@@ -10,7 +10,7 @@ import { Chips, Field, inputCls, NumberInput, Section } from "./bits";
 
 const NUMERIC_OPS: Op[] = [">", ">=", "<", "<=", "==", "!=", "between", "in", "not_in"];
 const CATEGORY_OPS: Op[] = ["==", "!=", "in", "not_in"];
-const OP_LABEL: Record<Op, string> = {
+export const OP_LABEL: Record<Op, string> = {
   ">": ">",
   ">=": "≥",
   "<": "<",
@@ -79,11 +79,11 @@ export const TEMPLATES: { name: string; about: string; spec: StrategySpec }[] = 
   },
 ];
 
-function opsFor(f: CatalogueFeature | undefined): Op[] {
+export function opsFor(f: CatalogueFeature | undefined): Op[] {
   return f?.numeric ? NUMERIC_OPS : CATEGORY_OPS;
 }
 
-function defaultValue(f: CatalogueFeature | undefined, op: Op): Scalar | Scalar[] {
+export function defaultValue(f: CatalogueFeature | undefined, op: Op): Scalar | Scalar[] {
   if (op === "between") return [0, 1];
   if (op === "in" || op === "not_in") return f?.unit === "bool" ? [true] : f?.numeric ? [1] : [""];
   if (f?.unit === "bool") return true;
@@ -98,7 +98,7 @@ function parseList(text: string, numeric: boolean): Scalar[] {
     .map((x) => (numeric ? Number(x) : x === "true" ? true : x === "false" ? false : x));
 }
 
-function ValueInput({
+export function ValueInput({
   cond,
   feature,
   catalogue,
@@ -156,7 +156,7 @@ function ValueInput({
   return <input className={inputCls} aria-label="Value" value={String(v)} onChange={(e) => onChange(e.target.value)} />;
 }
 
-function FeatureSelect({ value, catalogue, onChange }: { value: string; catalogue: Catalogue; onChange: (v: string) => void }) {
+export function FeatureSelect({ value, catalogue, onChange }: { value: string; catalogue: Catalogue; onChange: (v: string) => void }) {
   const groups = Object.entries(catalogue.groups);
   return (
     <select className={inputCls} aria-label="Feature" value={value} onChange={(e) => onChange(e.target.value)}>

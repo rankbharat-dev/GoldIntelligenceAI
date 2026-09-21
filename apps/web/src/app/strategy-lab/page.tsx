@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { CandleChart, type ChartMarker } from "@/components/candle-chart";
+import { ChartCreator } from "@/components/research/chart-creator";
+import { SearchForm } from "@/components/research/search-form";
 import { Notice, PageHeader, Section, Stat } from "@/components/research/bits";
 import { JobProgress, useJob } from "@/components/research/jobs";
 import { BLANK, StrategyForm, TEMPLATES } from "@/components/research/strategy-form";
@@ -63,7 +65,8 @@ function Editor({ initial, fromHash, sourceName }: { initial: StrategySpec; from
   const [spec, setSpec] = useState<StrategySpec>(initial);
   const [parent, setParent] = useState<string | null>(fromHash);
   const [saved, setSaved] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>("visual");
+  const initialMode = useSearchParams().get("mode");
+  const [mode, setMode] = useState<Mode>(initialMode === "chart" || initialMode === "ai" ? initialMode : "visual");
   const job = useJob();
 
   const catalogue = useQuery({ queryKey: ["catalogue"], queryFn: research.catalogue, staleTime: Infinity });
@@ -122,8 +125,8 @@ function Editor({ initial, fromHash, sourceName }: { initial: StrategySpec; from
           {(
             [
               ["visual", "Visual Builder", Blocks, null],
-              ["ai", "AI Discovery", Sparkles, 8],
-              ["chart", "Chart-Based Creator", PenTool, 7],
+              ["ai", "AI Discovery", Sparkles, null],
+              ["chart", "Chart-Based Creator", PenTool, null],
             ] as const
           ).map(([m, label, Icon, phase]) => (
             <button
@@ -143,19 +146,32 @@ function Editor({ initial, fromHash, sourceName }: { initial: StrategySpec; from
       </PageHeader>
 
       {mode === "ai" && (
-        <Notice>
-          <b>AI Discovery arrives in Phase 8.</b> The research engine will propose hypotheses, write them as specs like the
-          one in the Visual Builder, pre-register them, and run them through the same backtester and Validate checks —
-          keeping rejected ideas on record. Everything it needs from Phases 4–6 (spec, backtester, trial counter, sealed
-          holdout, validation) now exists.
-        </Notice>
+        <div className="space-y-3">
+          <Notice>
+            <b>AI Discovery</b> hands a search to the research engine: it combines building blocks, filters and exits,
+            registers every combination, tests them on tier A, validates the best and keeps both accepted and rejected
+            ideas with their reasons. Follow it on the{" "}
+            <Link className="text-primary hover:underline" href="/pipeline">
+              Research Pipeline
+            </Link>
+            . The AI Assistant can also propose searches; they wait for your approval there.
+          </Notice>
+          <SearchForm compact onCreated={(s) => router.push(`/pipeline?search=${s.search_id}`)} />
+        </div>
       )}
       {mode === "chart" && (
-        <Notice>
-          <b>Chart-Based Creator arrives in Phase 7.</b> You will mark a swing, trendline, channel or sweep on the chart and
-          it becomes measurable rules in this same spec. It needs the Phase 7 structure detectors (swings, S/R,
-          trendlines) as building blocks first.
-        </Notice>
+        <ChartCreator
+          onUse={(side, conditions, sessions) => {
+            setSpec({
+              ...spec,
+              meta: { ...spec.meta, name: "Chart idea", family: "chart-idea", hypothesis: spec.meta.hypothesis ?? "" },
+              entries: [{ side, conditions }],
+              filters: { ...spec.filters, sessions },
+            });
+            setParent(null);
+            setMode("visual");
+          }}
+        />
       )}
 
       {mode === "visual" && catalogue.data && (

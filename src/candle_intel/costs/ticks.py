@@ -47,15 +47,20 @@ def tick_files(raw_dir: Path) -> list[tuple[str, Path]]:
     return out
 
 
-def histogram(ticks: pl.DataFrame, weekly: pl.DataFrame, point: float) -> tuple[pl.DataFrame, dict[str, int]]:
+def histogram(
+    ticks: pl.DataFrame, weekly: pl.DataFrame, point: float, allow_zero: bool = False
+) -> tuple[pl.DataFrame, dict[str, int]]:
     """One day of raw ticks (ts_server, bid, ask) → per-minute spread histogram.
 
     Returns the histogram and counts of rejected ticks (non-positive spread or
-    price, or a timestamp outside the clock model)."""
+    price, or a timestamp outside the clock model). ``allow_zero`` keeps zero-spread
+    quotes: a Raw Spread account really quotes 0.0 at times; on a standard account a
+    zero spread is a data fault."""
     t = apply_weekly_offsets(ticks.sort("ts_server"), weekly).with_columns(
         spread_points=((pl.col("ask") - pl.col("bid")) / point).round().cast(pl.Int32)
     )
-    bad_price = (pl.col("bid") <= 0) | (pl.col("ask") <= 0) | (pl.col("spread_points") <= 0)
+    bad_spread = pl.col("spread_points") < 0 if allow_zero else pl.col("spread_points") <= 0
+    bad_price = (pl.col("bid") <= 0) | (pl.col("ask") <= 0) | bad_spread
     rejected = {
         "nonpositive": int(t.select(bad_price.sum()).item()),
         "no_clock": int(t["ts_utc"].null_count()),
@@ -76,7 +81,9 @@ def histogram(ticks: pl.DataFrame, weekly: pl.DataFrame, point: float) -> tuple[
     return hist, rejected
 
 
-def build_histogram(raw_dir: Path, weekly: pl.DataFrame, point: float) -> tuple[pl.DataFrame, dict[str, Any]]:
+def build_histogram(
+    raw_dir: Path, weekly: pl.DataFrame, point: float, allow_zero: bool = False
+) -> tuple[pl.DataFrame, dict[str, Any]]:
     """Histogram over the whole tick archive, one day file at a time (bounded memory)."""
     parts, days, rejected, n_ticks = [], [], {"nonpositive": 0, "no_clock": 0}, 0
     for day, path in tick_files(raw_dir):
@@ -84,7 +91,7 @@ def build_histogram(raw_dir: Path, weekly: pl.DataFrame, point: float) -> tuple[
         n_ticks += ticks.height
         if ticks.is_empty():
             continue
-        h, rej = histogram(ticks, weekly, point)
+        h, rej = histogram(ticks, weekly, point, allow_zero)
         parts.append(h)
         days.append(day)
         for k, v in rej.items():

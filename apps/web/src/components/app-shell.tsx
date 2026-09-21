@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Bot,
+  BrainCircuit,
   CandlestickChart,
   Database,
   FlaskConical,
@@ -39,14 +40,15 @@ interface NavItem {
 const NAV: NavItem[] = [
   { label: "Overview", hint: "Chart workspace", icon: LayoutDashboard, href: "/" },
   { label: "Data Center", hint: "Data health · costs", icon: Database, href: "/costs" },
-  { label: "Behaviour Explorer", hint: "Sequences · regimes · S/R", icon: ScanSearch, phase: 7 },
+  { label: "Behaviour Explorer", hint: "Sequences · regimes · S/R", icon: ScanSearch, href: "/explorer" },
   { label: "Strategy Lab", hint: "AI · Visual · From chart", icon: FlaskConical, href: "/strategy-lab" },
   { label: "Backtest", hint: "Test performance", icon: History, href: "/backtest" },
   { label: "Optimize", hint: "Parameter tuning", icon: SlidersHorizontal, href: "/optimize" },
   { label: "Validate", hint: "Out-of-sample · robustness", icon: ShieldCheck, href: "/validate" },
-  { label: "Research Pipeline", hint: "Hypotheses · runs", icon: Workflow, phase: 8 },
+  { label: "Research Pipeline", hint: "Hypotheses · runs", icon: Workflow, href: "/pipeline" },
   { label: "My Strategies", hint: "Library · versions · trials", icon: Library, href: "/strategies" },
-  { label: "AI Assistant", hint: "Ideas · explanations", icon: Bot, phase: 10 },
+  { label: "ML Lab", hint: "Filters vs rule baseline", icon: BrainCircuit, href: "/ml" },
+  { label: "AI Assistant", hint: "Ideas · explanations", icon: Bot, href: "/assistant" },
 ];
 
 function isActive(href: string, pathname: string) {

@@ -34,7 +34,7 @@ VOL_REGIMES = ("low", "mid", "high")
 # verdict itself (it is always enforced by the engine, never optional).
 NOT_CONDITIONABLE = {"hyg_no_entry"}
 
-_NUMERIC_UNITS = {"atr", "pts", "frac", "x", "bps", "bars", "ticks", "min", "h", "day", "sign"}
+_NUMERIC_UNITS = {"atr", "pts", "frac", "x", "bps", "bars", "ticks", "min", "h", "day", "sign", "count"}
 
 
 class _Strict(BaseModel):

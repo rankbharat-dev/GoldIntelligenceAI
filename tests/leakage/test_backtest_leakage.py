@@ -78,11 +78,10 @@ def test_honest_vs_shifted_target_canary(syn) -> None:
     assert leaky["expectancy_before_costs_r"] > 0.3  # the canary sings
 
 
-def test_planted_edge_is_found(syn) -> None:
-    m1, feats = syn
-    # Plant: after every M5 bar whose last three candles are D, D, U, price drifts up by
-    # 1.5 × that bar's ATR over the next 30 minutes, then fades back over 30 minutes.
-    f = feats.filter(pl.col("dirs_3") == "DDU").select("available_at", "atr_pts").drop_nulls()
+def plant(m1: pl.DataFrame, feats: pl.DataFrame, when: pl.Expr, size: float = 1.5) -> pl.DataFrame:
+    """After every M5 bar where ``when`` holds, price drifts up by ``size`` × that bar's
+    ATR over the next 30 minutes, then fades back over 30 minutes."""
+    f = feats.filter(when).select("available_at", "atr_pts").drop_nulls()
     t = m1["ts_utc"].dt.epoch("s").to_numpy()
     bump = np.zeros(len(t))
     for at, atr in f.iter_rows():
@@ -92,10 +91,13 @@ def test_planted_edge_is_found(syn) -> None:
         k = np.arange(60)
         shape = np.where(k < 30, (k + 1) / 30, (60 - k) / 30)
         seg = slice(i0, min(i0 + 60, len(t)))
-        bump[seg] += 1.5 * atr * 0.001 * shape[: seg.stop - seg.start]
-    planted = m1.with_columns(
-        [(pl.col(c) + pl.Series(bump)).alias(c) for c in ("open", "high", "low", "close")]
-    )
+        bump[seg] += size * atr * 0.001 * shape[: seg.stop - seg.start]
+    return m1.with_columns([(pl.col(c) + pl.Series(bump)).alias(c) for c in ("open", "high", "low", "close")])
+
+
+def test_planted_edge_is_found(syn) -> None:
+    m1, feats = syn
+    planted = plant(m1, feats, pl.col("dirs_3") == "DDU")
     s = spec([{"feature": "dirs_3", "op": "==", "value": "DDU"}])
     found = before_costs(s, mk_of(planted, feats))
     control = before_costs(s, mk_of(m1, feats))

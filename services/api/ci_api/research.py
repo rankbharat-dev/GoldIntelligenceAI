@@ -15,6 +15,8 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field, ValidationError
 
 from candle_intel.backtest import market
+from candle_intel.costs import build as cost_build
+from candle_intel.costs import profiles
 from candle_intel.research import checklist, optimize, runs, validate
 from candle_intel.research.jobs import JobRunner
 from candle_intel.research.ledger import HoldoutError, Ledger, default_ledger
@@ -38,7 +40,7 @@ def get_ledger() -> Ledger:
 
 def get_market() -> market.Market:
     try:
-        return market.load(market.latest_dataset_dir())
+        return market.load(market.latest_dataset_dir(), profiles.active())
     except FileNotFoundError as e:
         raise HTTPException(404, f"Data not built: {e}. Run ci-data, ci-costs and ci-features build.") from e
 
@@ -187,6 +189,11 @@ def research_overview() -> dict[str, Any]:
             "dataset_id": mk.dataset_id,
             "cost_model_id": mk.cost_model_id,
             "feature_set_id": mk.feature_set_id,
+        },
+        "cost_profile": {
+            "profile": mk.cost_profile,
+            "status": mk.cost_status,
+            "promotion_profile": profiles.PROMOTION_PROFILE,
         },
         "commission": {
             "per_lot_round_turn_usd": mk.commission.per_lot_round_turn_usd,
@@ -339,6 +346,35 @@ def holdout_unseal(body: UnsealBody) -> dict[str, Any]:
 
     job = runner.submit("holdout", f"Holdout (tier C) · {s.meta.name}", {"spec_hash": s.spec_hash}, work)
     return _job_ref(job)
+
+
+class CostJobBody(BaseModel):
+    action: Literal["provisional-raw", "calibrate-raw"]
+    commission_per_lot: Annotated[float, Field(ge=0, le=100)] = profiles.OWNER_RAW_COMMISSION_USD
+    raw_ticks: str | None = None  # raw version of the Raw Spread demo's tick archive (calibrate-raw)
+
+
+@router.post("/jobs/costs")
+def job_costs(body: CostJobBody) -> dict[str, Any]:
+    """Build a Raw cost profile from the dashboard. Reads Parquet only (the Raw demo's
+    ticks must already be ingested with ``ci-ingest raw --ticks --account-label raw``)."""
+    ds = market.latest_dataset_dir()
+    if body.action == "calibrate-raw" and not body.raw_ticks:
+        raise HTTPException(422, "choose the Raw account's tick archive")
+
+    def work(p):
+        p(0.05, body.action)
+        if body.action == "provisional-raw":
+            out = profiles.build_provisional_raw(ds, body.commission_per_lot)
+        else:
+            from candle_intel.costs.execution import Commission
+
+            c = Commission(per_lot_round_turn_usd=body.commission_per_lot, confirmed=True)
+            out = cost_build.build(ds, c, "raw", body.raw_ticks)
+        market.load.cache_clear()
+        return {"run_id": out.name}
+
+    return _job_ref(get_runner().submit("costs", f"Cost profile · {body.action}", body.model_dump(), work))
 
 
 @router.get("/jobs")

@@ -5,6 +5,8 @@
     research_runs       every backtest / optimisation / validation run and its headline
     holdout_access_log  tier-C unseals; the database allows one per family, ever
     research_jobs       long-running work and its progress (Phase 6)
+    research_searches / research_hypotheses   the research engine's searches (Phase 8)
+    pattern_definitions pre-registered behaviours (§9.2), immutable once written (Phase 7)
 
 The trial count is *derived* (rows per family), so it cannot drift from what was
 actually evaluated. Re-running an identical spec is not a new trial; any change to
@@ -115,6 +117,57 @@ def _tables(schema: str | None) -> tuple[MetaData, dict[str, Table]]:
             Column("created_at", DateTime(timezone=True), nullable=False),
             Column("started_at", DateTime(timezone=True)),
             Column("finished_at", DateTime(timezone=True)),
+        ),
+        # Research engine (Phase 8): a search and its hypotheses, written before testing.
+        "searches": Table(
+            "research_searches",
+            md,
+            Column("search_id", String(40), primary_key=True),
+            Column("name", String(120), nullable=False),
+            Column("family", String(60), nullable=False, index=True),
+            Column("definition", JSON, nullable=False),
+            Column("mode", String(12), nullable=False),  # auto / approve
+            Column("status", String(16), nullable=False),  # proposed running paused done failed cancelled
+            Column("control", String(12), nullable=False, default=""),  # "" or "pause"
+            Column("summary", JSON, nullable=False),
+            Column("job_id", String(40)),
+            Column("created_by", String(16), nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("started_at", DateTime(timezone=True)),
+            Column("finished_at", DateTime(timezone=True)),
+        ),
+        "hypotheses": Table(
+            "research_hypotheses",
+            md,
+            Column("search_id", String(40), primary_key=True),
+            Column("spec_hash", String(16), primary_key=True),
+            Column("seq", Integer, nullable=False),
+            Column("generation", Integer, nullable=False, default=0),
+            Column("gene", JSON, nullable=False),
+            Column("label", String(200), nullable=False),
+            Column("spec", JSON, nullable=False),
+            Column(
+                "status", String(16), nullable=False
+            ),  # planned passed_screen rejected not_selected candidate
+            Column("reasons", JSON, nullable=False),
+            Column("metrics", JSON, nullable=False),
+            Column("validate_run", String(40)),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+        ),
+        # Blueprint schema (infra/postgres/init/001_schema.sql): one row per (pattern, version).
+        "patterns": Table(
+            "pattern_definitions",
+            md,
+            Column("pattern_id", Text, primary_key=True),
+            Column("version", Integer, primary_key=True),
+            Column("description", Text, nullable=False),
+            Column("expected_direction", Text, nullable=False),  # long / short / either
+            Column("horizon_bars", Integer, nullable=False),
+            Column("min_sample_dev", Integer, nullable=False, default=1000),
+            Column("min_sample_val", Integer, nullable=False, default=250),
+            Column("rule", JSON, nullable=False),  # name, behaviour, side, conditions, barriers, …
+            Column("registered_at", DateTime(timezone=True), nullable=False),
         ),
     }
     return md, t
@@ -290,6 +343,70 @@ class Ledger:
             ) from e
         return self.holdout_status(family) or {}
 
+    # ------------------------------------------------------------ pre-registration (§9.2)
+    def register_pattern(
+        self,
+        slug: str,
+        rule: dict[str, Any],
+        description: str,
+        direction: str,
+        horizon_bars: int,
+        min_dev: int,
+        min_val: int,
+    ) -> dict[str, Any]:
+        """Pre-register ``slug``. The same rule (by ``rule["definition_hash"]``) returns
+        its existing row; a different rule becomes the next version. Rows are never
+        updated, so a registration always predates the results computed from it."""
+        p = self.t["patterns"]
+        for _ in range(3):  # retry if another writer took the version number
+            existing = [r for r in self._pattern_rows() if r["pattern_id"] == slug]
+            for r in existing:
+                if r["rule"].get("definition_hash") == rule.get("definition_hash"):
+                    return _pattern_view(r)
+            version = max((r["version"] for r in existing), default=0) + 1
+            try:
+                with self.engine.begin() as c:
+                    c.execute(
+                        insert(p).values(
+                            pattern_id=slug,
+                            version=version,
+                            description=description,
+                            expected_direction=direction,
+                            horizon_bars=horizon_bars,
+                            min_sample_dev=min_dev,
+                            min_sample_val=min_val,
+                            rule=rule,
+                            registered_at=_now(),
+                        )
+                    )
+            except IntegrityError:
+                continue
+            return self.pattern(f"{slug}_v{version}") or {}
+        raise RuntimeError(f"could not register {slug}")
+
+    def _pattern_rows(self) -> list[dict[str, Any]]:
+        p = self.t["patterns"]
+        with self.engine.connect() as c:
+            q = select(p).order_by(p.c.registered_at, p.c.pattern_id, p.c.version)
+            return [dict(r) for r in c.execute(q).mappings()]
+
+    def patterns(self) -> list[dict[str, Any]]:
+        return [_pattern_view(r) for r in self._pattern_rows()]
+
+    def pattern(self, key: str) -> dict[str, Any] | None:
+        """``key`` = ``<pattern_id>_v<version>``."""
+        slug, _, v = key.rpartition("_v")
+        if not slug or not v.isdigit():
+            return None
+        p = self.t["patterns"]
+        with self.engine.connect() as c:
+            r = (
+                c.execute(select(p).where((p.c.pattern_id == slug) & (p.c.version == int(v))))
+                .mappings()
+                .first()
+            )
+        return _pattern_view(dict(r)) if r else None
+
     # ------------------------------------------------------------ jobs
     def job_create(self, job_id: str, kind: str, title: str, params: dict) -> None:
         with self.engine.begin() as c:
@@ -342,10 +459,95 @@ class Ledger:
             )
             return res.rowcount or 0
 
+    # ------------------------------------------------------------ research engine (Phase 8)
+    def search_create(self, row: dict[str, Any], hypotheses: list[dict[str, Any]]) -> None:
+        now = _now()
+        with self.engine.begin() as c:
+            c.execute(insert(self.t["searches"]).values(**row, control="", created_at=now))
+            if hypotheses:
+                c.execute(
+                    insert(self.t["hypotheses"]),
+                    [
+                        h | {"search_id": row["search_id"], "created_at": now, "updated_at": now}
+                        for h in hypotheses
+                    ],
+                )
+
+    def hypotheses_add(self, search_id: str, hypotheses: list[dict[str, Any]]) -> int:
+        """Register new hypotheses (evolutionary generations) before they are tested.
+        Already-known specs of this search are skipped. Returns how many were added."""
+        known = {h["spec_hash"] for h in self.hypotheses(search_id)}
+        new = [h for h in hypotheses if h["spec_hash"] not in known]
+        if new:
+            now = _now()
+            with self.engine.begin() as c:
+                c.execute(
+                    insert(self.t["hypotheses"]),
+                    [h | {"search_id": search_id, "created_at": now, "updated_at": now} for h in new],
+                )
+        return len(new)
+
+    def search_update(self, search_id: str, **values: Any) -> None:
+        if "summary" in values:
+            values["summary"] = json.loads(json.dumps(values["summary"], default=str))
+        with self.engine.begin() as c:
+            c.execute(
+                update(self.t["searches"]).where(self.t["searches"].c.search_id == search_id).values(**values)
+            )
+
+    def search(self, search_id: str) -> dict[str, Any] | None:
+        t = self.t["searches"]
+        with self.engine.connect() as c:
+            r = c.execute(select(t).where(t.c.search_id == search_id)).mappings().first()
+        return dict(r) if r else None
+
+    def searches(self, limit: int = 50) -> list[dict[str, Any]]:
+        t = self.t["searches"]
+        with self.engine.connect() as c:
+            q = select(t).order_by(t.c.created_at.desc()).limit(limit)
+            return [dict(r) for r in c.execute(q).mappings()]
+
+    def hypothesis_update(self, search_id: str, spec_hash: str, **values: Any) -> None:
+        h = self.t["hypotheses"]
+        for k in ("metrics", "reasons"):
+            if k in values:
+                values[k] = json.loads(json.dumps(values[k], default=str))
+        with self.engine.begin() as c:
+            c.execute(
+                update(h)
+                .where((h.c.search_id == search_id) & (h.c.spec_hash == spec_hash))
+                .values(**values, updated_at=_now())
+            )
+
+    def hypotheses(self, search_id: str) -> list[dict[str, Any]]:
+        h = self.t["hypotheses"]
+        with self.engine.connect() as c:
+            q = select(h).where(h.c.search_id == search_id).order_by(h.c.seq)
+            return [dict(r) for r in c.execute(q).mappings()]
+
     def _wipe(self) -> None:  # tests only
         with self.engine.begin() as c:
             for t in self.t.values():
                 c.execute(delete(t))
+
+
+def _pattern_view(r: dict[str, Any]) -> dict[str, Any]:
+    rule = r["rule"]
+    return {
+        "pattern_id": f"{r['pattern_id']}_v{r['version']}",
+        "slug": r["pattern_id"],
+        "version": r["version"],
+        "name": rule.get("name", r["pattern_id"]),
+        "behaviour": rule.get("behaviour", "custom"),
+        "description": r["description"],
+        "definition": {k: rule[k] for k in ("side", "conditions", "barriers", "hypothesis") if k in rule},
+        "expected_direction": r["expected_direction"],
+        "horizon_bars": r["horizon_bars"],
+        "min_samples": {"A": r["min_sample_dev"], "B": r["min_sample_val"], "C": 100},
+        "rule_version": rule.get("rule_version"),
+        "created_by": rule.get("created_by", "owner"),
+        "registered_at": r["registered_at"],
+    }
 
 
 @lru_cache(maxsize=1)

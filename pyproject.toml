@@ -38,6 +38,10 @@ ml = [
     "optuna>=5.0",
     "mlflow>=3.16",
 ]
+# AI Assistant API mode (Phase 10): official SDK pointed at the owner's router (CI_LLM_BASE_URL).
+assistant = [
+    "anthropic>=1.0",
+]
 # Apache-2.0 + Commons Clause. Development-tier screening only; never the execution truth engine.
 screening = [
     "vectorbt>=1.1",
@@ -84,3 +88,5 @@ ignore = ["S101"]
 "tests/**" = ["S106", "DTZ001"]
 # MT5 range bounds are naive broker-server wall times by design (see mt5_session.to_epoch_seconds).
 "src/candle_intel/ingest/**" = ["DTZ001"]
+# The assistant's prompt shows the spec JSON shape on single lines.
+"src/candle_intel/assistant/chat.py" = ["E501"]

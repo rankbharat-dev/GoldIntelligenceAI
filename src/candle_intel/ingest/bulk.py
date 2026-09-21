@@ -91,6 +91,7 @@ def ingest(
     since: datetime | None = None,
     with_ticks: bool = False,
     tick_days: int | None = None,
+    account_label: str | None = None,
 ) -> Path:
     """Create a new raw dataset version. Returns its directory."""
     s = get_settings()
@@ -150,7 +151,7 @@ def ingest(
         manifest = {
             "raw_version": version,
             "symbol": CANONICAL_SYMBOL,
-            "session": asdict(info),
+            "session": asdict(info) | {"account_label": account_label or "standard"},
             "price_side": "bid",
             "clock": "broker_server",
             "m1_window_ts_server": [str(start), str(end)],

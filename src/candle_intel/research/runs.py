@@ -141,6 +141,8 @@ def run_backtest(
         "lineage": {
             "dataset_id": mk.dataset_id,
             "cost_model_id": mk.cost_model_id,
+            "cost_profile": mk.cost_profile,
+            "cost_profile_status": mk.cost_status,
             "feature_set_id": mk.feature_set_id,
             "code_version": code_version(),
             "engine": "event-driven M1 v1",

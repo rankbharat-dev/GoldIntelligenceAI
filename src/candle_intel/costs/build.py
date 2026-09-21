@@ -1,7 +1,14 @@
 """ci-costs — build, validate and version the cost model of a derived dataset.
 
     ci-costs build [--dataset <derived id>] [--commission-per-lot USD --commission-confirmed]
+    ci-costs build --profile raw --raw-ticks <raw_version> --commission-per-lot 10 --commission-confirmed
+    ci-costs provisional-raw [--commission-per-lot 10]
     ci-costs list  [--dataset <derived id>]
+
+Profiles (``costs/profiles.py``): ``demo_trial7`` = the account the bars come from;
+``raw`` = the Exness Raw Spread account, calibrated from that account's own ticks
+(ratio of its quotes to the demo bars' spread level, same minutes) or, before any
+Raw ticks exist, *provisional* (demo spreads as an upper bound + the commission).
 
 Output: storage/derived/xauusd/<dataset_id>/costs/<cost_model_id>/   (read-only files)
     M1_costs.parquet  M5_costs.parquet   per-bar spread quantiles, source, scenarios
@@ -29,7 +36,7 @@ from typing import Any
 import polars as pl
 
 from candle_intel.config import get_settings
-from candle_intel.costs import execution, spread, ticks, validate, volatility
+from candle_intel.costs import execution, profiles, spread, ticks, validate, volatility
 from candle_intel.provenance import code_version, config_hash
 
 log = logging.getLogger("ci-costs")
@@ -74,7 +81,15 @@ def _write_json(obj: Any, path: Path) -> None:
     path.chmod(0o444)
 
 
-def build(dataset_dir: Path, commission: execution.Commission | None = None) -> Path:
+def build(
+    dataset_dir: Path,
+    commission: execution.Commission | None = None,
+    profile: str = profiles.DEFAULT_PROFILE,
+    raw_ticks: str | None = None,
+) -> Path:
+    """Build a cost model. ``raw_ticks`` = raw version (``storage/raw/xauusd/<id>``) of
+    *another* account's tick archive to calibrate ``profile`` from (the Raw Spread demo);
+    omitted = the dataset's own ticks (the demo account)."""
     commission = commission or execution.Commission()
     manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
     spec = manifest["symbol_spec"]
@@ -82,6 +97,23 @@ def build(dataset_dir: Path, commission: execution.Commission | None = None) -> 
     raw_dir = raw_root() / manifest["raw_version"]
     if _sha256(raw_dir / "manifest.json") != manifest["raw_manifest_sha256"]:
         raise RuntimeError("Raw manifest changed since the derived dataset was built")
+    tick_dir, other = raw_dir, raw_ticks is not None
+    if other:
+        names = {p.name for p in raw_root().iterdir()}
+        if raw_ticks not in names:
+            raise FileNotFoundError(f"no raw dataset {raw_ticks!r} under {raw_root()}")
+        tick_dir = raw_root() / raw_ticks
+        own = json.loads((raw_dir / "manifest.json").read_text(encoding="utf-8"))["session"]
+        theirs = json.loads((tick_dir / "manifest.json").read_text(encoding="utf-8"))["session"]
+        if theirs.get("server_offset_hours") != own.get("server_offset_hours"):
+            raise RuntimeError(
+                f"{raw_ticks} runs on a different server clock ({theirs.get('server_offset_hours')} h vs "
+                f"{own.get('server_offset_hours')} h); build a derived dataset for it first"
+            )
+        if theirs.get("account_label") != profile:
+            log.warning(
+                "tick archive is labelled %r, building profile %r", theirs.get("account_label"), profile
+            )
 
     config = {
         "model_version": MODEL_VERSION,
@@ -111,9 +143,9 @@ def build(dataset_dir: Path, commission: execution.Commission | None = None) -> 
     keys = spread.bar_keys(m1, vol, edges)
     log.info("M1 bars: %d · vol tercile edges %.3f / %.3f", keys.height, *edges)
 
-    hist, tick_info = ticks.build_histogram(raw_dir, weekly, point)
+    hist, tick_info = ticks.build_histogram(tick_dir, weekly, point, allow_zero=other)
     measured = ticks.minutes(hist)
-    khist = spread.keyed_histogram(hist, keys)
+    khist = spread.keyed_histogram(hist, keys, "bar_level" if other else "own_min")
 
     # ------------------------------------------------------------ validate, then fit on everything
     report = validate.validate(khist, measured, keys)
@@ -153,7 +185,8 @@ def build(dataset_dir: Path, commission: execution.Commission | None = None) -> 
 
     # ------------------------------------------------------------ persist
     built = datetime.now(UTC)
-    cost_model_id = f"{manifest['broker_server'].lower()}_c{built:%Y%m%dT%H%M%SZ}"
+    tag = "" if profile == profiles.DEFAULT_PROFILE else f"_{profile}"
+    cost_model_id = f"{manifest['broker_server'].lower()}{tag}_c{built:%Y%m%dT%H%M%SZ}"
     out = dataset_dir / "costs" / cost_model_id
     out.mkdir(parents=True)
     files = {
@@ -169,6 +202,15 @@ def build(dataset_dir: Path, commission: execution.Commission | None = None) -> 
     doc = {
         "cost_model_id": cost_model_id,
         "model_version": MODEL_VERSION,
+        "profile": profile,
+        "account_label": "raw" if other else "standard",
+        "status": "validated" if report["passed"] else "failed_validation",
+        "tick_source_raw_version": tick_dir.name,
+        "spread_basis": (
+            "this account's ticks, as a ratio to the demo bars' spread level (same minutes)"
+            if other
+            else "measured on this account's ticks"
+        ),
         "dataset_id": manifest["dataset_id"],
         "raw_version": manifest["raw_version"],
         "broker": manifest["broker"],
@@ -264,6 +306,11 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument(
         "--commission-confirmed", action="store_true", help="the commission is the account's actual one"
     )
+    b.add_argument("--profile", choices=list(profiles.PROFILES), default=profiles.DEFAULT_PROFILE)
+    b.add_argument("--raw-ticks", help="raw version of the other account's tick archive (Raw Spread demo)")
+    pr = sub.add_parser("provisional-raw", help="Raw profile from demo spreads (upper bound) + commission")
+    pr.add_argument("--dataset")
+    pr.add_argument("--commission-per-lot", type=float, default=profiles.OWNER_RAW_COMMISSION_USD)
     ls = sub.add_parser("list")
     ls.add_argument("--dataset")
     args = p.parse_args(argv)
@@ -278,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
                 [
                     {k: m[k] for k in ("cost_model_id", "dataset_id", "built_utc", "config_hash")}
                     | {"validation_passed": m["validation"]["passed"]}
+                    | dict(zip(("profile", "status"), profiles.profile_of(m), strict=True))
                     for m in items
                 ],
                 indent=2,
@@ -285,10 +333,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.cmd == "provisional-raw":
+        out = profiles.build_provisional_raw(dataset_dir, args.commission_per_lot)
+        print(json.dumps(profiles.listing(dataset_dir), indent=2, default=str))
+        return 0
+
     commission = execution.Commission(
         per_lot_round_turn_usd=args.commission_per_lot, confirmed=args.commission_confirmed
     )
-    out = build(dataset_dir, commission)
+    out = build(dataset_dir, commission, args.profile, args.raw_ticks)
     doc = json.loads((out / "cost_model.json").read_text(encoding="utf-8"))
     print(
         json.dumps(

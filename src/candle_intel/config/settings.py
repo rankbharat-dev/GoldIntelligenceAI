@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     # Research ledger (trials, runs, holdout log, jobs). Default: the PostgreSQL above.
     research_db_url: SecretStr | None = None
 
+    # --- AI Assistant, API mode (optional; owner decision 2026-09-21) --------------
+    # A third-party router (AgentRouter) that speaks the Anthropic Messages API. Only
+    # questions, specs and tier-A/B results are ever sent — never secrets or tier C.
+    llm_provider: str | None = None
+    llm_base_url: str | None = None
+    llm_api_key: SecretStr | None = None
+    llm_model: str = "claude-opus-5"
+    llm_fast_model: str | None = None
+
     @field_validator("mt5_broker_symbol")
     @classmethod
     def _gold_only(cls, v: str) -> str:

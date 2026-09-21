@@ -48,6 +48,36 @@
         "CI_NEXT_DIST": ".next-preview",
         "CI_API_ORIGIN": "http://127.0.0.1:8001"
       }
+    },
+    {
+      "name": "api-dev",
+      "runtimeExecutable": "C:\\Gold_Intelligence_AI\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "ci_api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8002"
+      ],
+      "port": 8002
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "C:\\Gold_Intelligence_AI\\apps\\web",
+        "run",
+        "dev"
+      ],
+      "port": 3200,
+      "autoPort": true,
+      "env": {
+        "CI_NEXT_DIST": ".next-dev2",
+        "CI_API_ORIGIN": "http://127.0.0.1:8002"
+      }
     }
   ]
 }
