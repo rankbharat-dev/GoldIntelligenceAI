@@ -1,0 +1,30 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# data — large, immutable, versioned by manifest not by git
+storage/raw/
+storage/derived/
+storage/features/
+storage/models/
+storage/experiments/
+storage/reports/
+mlruns/
+
+# node
+node_modules/
+.next/
+
+# os/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

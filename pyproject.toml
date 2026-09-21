@@ -1,0 +1,80 @@
+[project]
+name = "candle-intelligence"
+version = "0.1.0"
+description = "XAUUSD-only candle behaviour research platform"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+dependencies = [
+    # MT5 terminal bridge. Windows-only binary; used by ingestion and the MCP server only.
+    "MetaTrader5>=5.0.6180; sys_platform == 'win32'",
+    "polars>=1.44",
+    "numpy>=2.5",
+    "scipy>=1.18",
+    "duckdb>=1.5",
+    "pyarrow>=25.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.15",
+    "tzdata>=2025.2",            # Windows Python ships without the IANA tz database
+    "fastapi>=0.141",
+    "uvicorn>=0.35",
+    "mcp>=2.2",                  # official MCP SDK — used by services/mt5_mcp only
+    "sqlalchemy>=2.0.54",
+    "psycopg[binary]>=3.3",
+]
+
+[project.optional-dependencies]
+research = [
+    "scikit-learn>=1.9",         # RANSAC trendlines, DBSCAN level clustering, baselines
+    "arch>=8.0",                 # Hansen SPA, StepM, stationary bootstrap
+    "plotly>=7.1",               # research viewer (Phase 4)
+]
+vision = [
+    "opencv-python-headless>=5.0",
+    "scikit-image>=0.26",
+]
+ml = [
+    "lightgbm>=4.7",
+    "optuna>=5.0",
+    "mlflow>=3.16",
+]
+# Apache-2.0 + Commons Clause. Development-tier screening only; never the execution truth engine.
+screening = [
+    "vectorbt>=1.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4",
+    "ruff>=0.13",
+]
+
+[project.scripts]
+ci-mt5-mcp = "ci_mt5_mcp.server:main"
+ci-ingest = "candle_intel.ingest.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/candle_intel", "services/mt5_mcp/ci_mt5_mcp", "services/api/ci_api"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "mt5: requires a running, logged-in MT5 terminal",
+]
+addopts = "-m 'not mt5'"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "DTZ"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests deliberately use naive datetimes (MT5 wall-clock semantics) and dummy secrets.
+"tests/**" = ["S106", "DTZ001"]

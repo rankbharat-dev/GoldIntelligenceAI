@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "candle-intelligence-mt5": {
+      "type": "stdio",
+      "command": ".venv/Scripts/python.exe",
+      "args": ["-m", "ci_mt5_mcp.server"]
+    }
+  }
+}

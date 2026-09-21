@@ -1,0 +1,203 @@
+# PROJECT: CANDLE INTELLIGENCE AI
+
+## Autonomous Candlestick Behaviour Research & Trading Model Development
+
+### 1. Project Vision
+
+I want to build an independent AI-powered trading research platform called **Candle Intelligence AI**.
+
+My core hypothesis is that candlestick charts represent a form of market language. Individual candles, sequences of candles, market structure, momentum, volatility, and price reactions may contain recurring behavioural patterns that can be decoded, studied, and potentially used to develop profitable trading strategies.
+
+The objective is to research this hypothesis scientifically using historical market data, statistical analysis, machine learning, and realistic backtesting.
+
+I do not want to build another conventional indicator-based trading bot.
+
+I want to develop an intelligent system that can study historical price behaviour, discover recurring patterns, measure their predictive value, and eventually generate and execute trading strategies based on validated statistical evidence.
+
+Profitability is a research objective, not an assumed outcome.
+
+### 2. Initial Research Scope
+
+Start with one financial instrument:
+
+**XAUUSD (Gold)**
+
+Primary timeframe: M5
+
+Additional timeframes:
+
+* M1 for detailed price movement and execution analysis.
+* M15 and H1 for broader market context.
+
+Historical data target: Up to 20 years, depending on availability and quality.
+
+Initially, use a smaller, high-quality historical dataset to build and validate the research infrastructure.
+
+### 3. Core Research Objectives
+
+Develop a system capable of:
+
+1. Understanding individual candle anatomy, including body, upper wick, lower wick, range, and closing position.
+
+2. Analyzing sequences of candles rather than treating each candle independently.
+
+3. Identifying recurring price behaviours such as momentum continuation, rejection, breakout, failed breakout, liquidity sweep, consolidation, and volatility expansion.
+
+4. Studying how market structure, trading sessions, volatility, and price location influence candle behaviour.
+
+5. Discovering previously unidentified patterns using statistical analysis and machine learning.
+
+6. Measuring what happens after each detected behaviour across different historical periods.
+
+7. Determining whether any discovered behaviour provides a statistically meaningful trading advantage after realistic transaction costs.
+
+8. Converting validated behaviours into systematic trading strategies with clearly defined entry, exit, stop-loss, take-profit, and risk-management rules.
+
+### 4. Proposed Research Architecture
+
+Design the platform around the following components:
+
+**A. Historical Data Engine**
+
+Collect, validate, store, and process historical XAUUSD price data.
+
+**B. Candle Behaviour Decoder**
+
+Convert raw OHLC data into structured numerical features representing candle anatomy, sequences, momentum, volatility, and market structure.
+
+**C. Pattern Discovery Engine**
+
+Use rule-based analysis, statistical methods, and machine learning to identify recurring market behaviours.
+
+**D. Statistical Research Engine**
+
+Measure historical outcomes, conditional probabilities, expected returns, drawdowns, and pattern stability.
+
+**E. Strategy Development Engine**
+
+Convert promising behavioural patterns into systematic trading strategies.
+
+**F. Backtesting and Validation Engine**
+
+Test strategies using realistic historical execution assumptions, transaction costs, chronological data separation, and out-of-sample validation.
+
+**G. Paper Trading Engine**
+
+Evaluate validated strategy candidates using real-time market data without risking actual capital.
+
+Live trading integration should only be considered after sufficient research and forward validation.
+
+### 5. Research Principles
+
+* Do not assume that any candlestick pattern is inherently profitable.
+* Do not use future market information when generating historical signals.
+* Avoid overfitting, look-ahead bias, survivorship bias, and data leakage.
+* Account for spread, slippage, commissions, and execution limitations.
+* Compare machine-learning models against simple rule-based baselines.
+* Prioritize statistical evidence over visually attractive chart patterns.
+* Clearly distinguish historical correlation from reliable predictive ability.
+* Allow the system to conclude that a pattern has no exploitable trading advantage.
+* Do not execute real-money trades during the initial research phase.
+
+### 6. Technology and Development
+
+Recommend an appropriate technology stack for:
+
+* Historical market data storage and processing.
+* Large-scale candle sequence analysis.
+* Statistical research and machine learning.
+* Strategy development and backtesting.
+* Interactive chart visualization.
+* Research dashboards and experiment tracking.
+
+Prioritize a modular architecture, reproducible experiments, computational efficiency, and reasonable infrastructure costs.
+
+The project must remain independent of Shiibaa. Do not modify or integrate with any existing Shiibaa codebase.
+
+### 7. Your Initial Task
+
+Act as a quantitative researcher, experienced XAUUSD trader, machine-learning engineer, and software architect.
+
+Before writing production code:
+
+1. Critically evaluate the Candle Intelligence hypothesis and identify its technical and statistical challenges.
+2. Research existing approaches to candlestick behaviour analysis, algorithmic pattern discovery, and quantitative trading.
+3. Recommend the most practical methodology for our initial XAUUSD research.
+4. Design the high-level system architecture.
+5. Define the historical data requirements and suitable data sources.
+6. Propose a phased development roadmap with clear research milestones.
+7. Define measurable success criteria for determining whether a discovered trading model has a genuine statistical advantage.
+
+Do not attempt to build the entire platform immediately.
+
+Start by presenting your research findings, proposed architecture, and Phase 1 implementation plan.
+
+Our first milestone is to create a reliable Candle Behaviour Research Engine capable of analyzing historical XAUUSD candles and measuring recurring price behaviours.
+
+The ultimate goal is to discover, validate, and develop trading models that demonstrate positive risk-adjusted expectancy under realistic market conditions.
+
+
+## ADDITIONAL MODULE: VISUAL CHART INTELLIGENCE
+
+Extend the Candle Intelligence AI research platform with a Visual Chart Intelligence module.
+
+The objective is to develop an AI system capable of analyzing XAUUSD candlestick charts in a manner similar to an experienced human technical analyst.
+
+The system must combine computer vision, mathematical price-structure analysis, historical OHLC data, and statistical validation.
+
+### Core capabilities
+
+1. Automatically detect and draw horizontal support and resistance zones.
+
+2. Identify swing highs, swing lows, ascending and descending trendlines.
+
+3. Detect parallel price channels, horizontal ranges, triangles, wedges, flags, double tops, double bottoms, and other chart formations.
+
+4. Identify market structure, breakouts, failed breakouts, retests, rejection zones, and potential liquidity sweeps.
+
+5. Analyze chart patterns across M1, M5, M15, and H1 timeframes.
+
+6. Allow users to manually draw trendlines, channels, and support-resistance zones and search historical data for similar formations.
+
+7. Automatically annotate detected patterns on interactive candlestick charts.
+
+8. Convert visual observations into numerical features that can be used for machine-learning research.
+
+9. Measure historical outcomes following each detected formation, including probability estimates, expected returns, adverse movement, and risk-adjusted performance.
+
+10. Compare the predictive value of visual chart patterns against numerical candle-behaviour models.
+
+### Technical approach
+
+Use a hybrid architecture.
+
+The mathematical detection engine should analyze raw OHLC data to calculate precise swing points, price levels, trendline coordinates, channel boundaries, and pattern geometry.
+
+A vision-capable AI model should analyze selected chart images to identify complex or ambiguous visual formations.
+
+Do not rely exclusively on screenshot-based analysis.
+
+All detected patterns must be mapped to exact timestamps and price coordinates and independently verified against the underlying historical market data.
+
+Avoid future-data leakage. Historical pattern detection must use only the candles available at the time of the simulated decision.
+
+### Frontend
+
+Create a dedicated Visual Chart Lab with:
+
+* Interactive XAUUSD candlestick charts.
+* Automatic support-resistance and trendline drawing.
+* Parallel channel and chart-pattern overlays.
+* Manual drawing tools.
+* Historical chart replay.
+* AI-generated chart explanations.
+* Pattern search and historical similarity analysis.
+* Statistical performance reports for detected patterns.
+
+### Research objective
+
+Investigate whether visually identifiable chart structures provide a measurable predictive advantage when combined with candle behaviour, market context, and statistical analysis.
+
+Do not assume that visually convincing patterns are inherently profitable.
+
+Start by designing the Visual Chart Intelligence architecture and implement support-resistance, swing-point detection, and trendline recognition before introducing more complex formations.
