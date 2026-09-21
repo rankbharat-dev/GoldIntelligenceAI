@@ -19,10 +19,13 @@ from fastapi import FastAPI, HTTPException, Query
 
 from candle_intel.config import get_settings
 
+from . import research
+
 Timeframe = Literal["M1", "M5", "M15", "H1"]
 MAX_BARS = 5000
 
-app = FastAPI(title="Candle Intelligence API", version="0.1.0", docs_url="/docs")
+app = FastAPI(title="Candle Intelligence API", version="0.2.0", docs_url="/docs")
+app.include_router(research.router)
 
 
 def _root() -> Path:

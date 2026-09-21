@@ -1,6 +1,6 @@
 # Session Handoff — read this first
 
-Last updated: 2026-09-21 · End of Phase 3 + new UI shell · Owner communicates in Hinglish.
+Last updated: 2026-09-21 · End of Phase 6 · Owner communicates in Hinglish.
 
 > **Goal, target dashboard and the revised roadmap live in [MASTER_PROMPT.md](MASTER_PROMPT.md)**
 > (owner decisions of 2026-09-21: strategy research workbench + AI Research Engine, 5 years
@@ -41,11 +41,12 @@ Governing spec: [ARCHITECTURE_v1.2.md](ARCHITECTURE_v1.2.md). Library choices:
 | Broker clock | UTC+0 (measured) |
 | Terminal safety | Algo Trading OFF; investor-password login not used (optional) |
 | Other terminal data | The MT5 data dir also holds Exness **real** account servers — never touch them |
-| PostgreSQL | Docker container `candle-intelligence-postgres` on **127.0.0.1:5434** (5433 belongs to another project, `staff-manager-pg`) |
+| PostgreSQL | Docker container `candle-intelligence-postgres` on **127.0.0.1:5434** (5433 belongs to another project, `staff-manager-pg`). Use `127.0.0.1`, not `localhost`: on this machine `localhost` tries IPv6 first and psycopg hangs |
+| LLM (AI Assistant API mode) | AgentRouter key in `.env` (`CI_LLM_*`), git-ignored. Not called by any code yet (Phase 10) |
 | GitHub | https://github.com/rankbharat-dev/GoldIntelligenceAI — **public**; commits use `290257992+rankbharat-dev@users.noreply.github.com` |
 | Git policy | Commit / push only when the owner asks |
 
-## 4. What exists (Phases 0–3 complete)
+## 4. What exists (Phases 0–6 complete)
 
 | Component | Path | Command |
 |---|---|---|
@@ -54,11 +55,15 @@ Governing spec: [ARCHITECTURE_v1.2.md](ARCHITECTURE_v1.2.md). Library choices:
 | Data engine | `src/candle_intel/data/{clock,quality,aggregate,build}.py` | `ci-data build \| list` |
 | Cost model | `src/candle_intel/costs/{ticks,volatility,spread,execution,validate,build}.py` | `ci-costs build \| list` |
 | Feature store | `src/candle_intel/features/{registry,compute,leakage,store,build}.py` | `ci-features build \| list \| show --time <UTC>` |
-| Metadata DB | `src/candle_intel/db.py`, `infra/postgres/init/001_schema.sql` | `docker compose up -d` |
-| Research API | `services/api/ci_api/main.py` | `ci-api` → :8000 |
+| Strategy spec | `src/candle_intel/strategy/{spec,signals}.py` | — |
+| Backtester | `src/candle_intel/backtest/{market,split,engine,metrics}.py` | via API jobs |
+| Research layer | `src/candle_intel/research/{ledger,runs,optimize,validate,checklist,jobs}.py`, `statistics/robust.py` | via API jobs |
+| Metadata DB | `src/candle_intel/db.py`, `infra/postgres/init/001_schema.sql`; research ledger tables (`research_specs/trials/runs/jobs`, `holdout_access_log`) created by `research/ledger.py` | `docker compose up -d` |
+| Research API | `services/api/ci_api/main.py` + `research.py` (specs, preview, runs, trades, jobs, holdout) | `ci-api` → :8000 (restart after backend changes — no auto-reload) |
 | MCP server | `services/mt5_mcp/ci_mt5_mcp/server.py`, `.mcp.json` | stdio |
-| Web app | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5): `/` Chart Viewer (click a candle → features panel), `/costs` Costs | `npm --prefix apps/web run dev` → :3000 |
-| Tests | `tests/{unit,leakage,integration}`, shared synthetic gold-calendar history in `tests/conftest.py` | `pytest` (80 pass + 2 with `-m mt5`) |
+| Web app | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5): `/` Overview, `/costs` Data Center, `/strategy-lab`, `/backtest`, `/optimize`, `/validate`, `/strategies`; job tray in the header | `npm --prefix apps/web run dev` → :3000 |
+| Preview pair | `.claude/launch.json` `api-preview` (:8001) + `web-preview` (`CI_NEXT_DIST=.next-preview`, proxies to :8001) — lets a session test next to the owner's own :3000/:8000 servers | preview tools |
+| Tests | `tests/{unit,leakage,integration}`, shared synthetic gold-calendar history in `tests/conftest.py` | `pytest` (109 pass + 2 with `-m mt5`) |
 
 Data on disk (git-ignored, in `storage/`):
 - Raw `xauusd_exness-mt5trial7_20260921T071357Z`: M1 2021-07-01 → 2026-09-21 (1.84 M bars),
@@ -135,7 +140,7 @@ Real-data facts: 4,416 M5 bars abnormal-spread (1.2 %), 11,771 in the rollover w
 15,957 `hyg_no_entry` (4.3 %); sessions: asian 32 %, london 22 %, new_york 21 %,
 overlap 18 %, off 7 %. Holiday early closes are not flagged by `hyg_week_last3` (A8).
 
-**Next: Phase 4 — Strategy spec + Backtester** ([MASTER_PROMPT.md](MASTER_PROMPT.md) §8):
+*(Done — see §6d.)* The Phase 4 plan as it was written:
 Pydantic spec in `src/candle_intel/strategy/` (entry conditions over these feature names,
 filters incl. `hyg_no_entry`, exits, sizing, meta), event-driven engine in
 `src/candle_intel/backtest/` (decide on M5 close via `FeatureStore`, fill at next M5 open,
@@ -154,6 +159,41 @@ Costs page renamed "Data Center · Costs" (`app-nav.tsx` removed). No backend ch
 **Rule for every new page: show engine-produced numbers or an honest empty state — never
 illustrative metrics.** Open owner question Q-UI1 (in-page AI chat with or without API key).
 
+## 6d. Phases 4–6 — spec, backtester, Strategy Lab, Backtest, Optimize, Validate (done 2026-09-21)
+
+Design: blueprint §9 "Implementation note — 2026-09-21 (Phases 4–6)". Owner decisions:
+`requirements/2026-09-21_phases-4-6-and-hybrid-assistant.md`.
+
+- **Spec** (`strategy-spec/1`): entry rules over the 89 conditionable features, filters, ATR
+  exits (stop / target / time / trailing / flat before weekend), fixed-fractional sizing,
+  family. `spec_hash` identifies the rules.
+- **Engine**: decide at M5 close → fill at the next M1 open → stops/targets on the M1 path;
+  3 cost scenarios per run; pessimistic intrabar policy; ~4 s for 5 years of tier A.
+- **Split frozen** in `storage/research/split.json` (tracked in git): A 2021-07-05 → 2024-08-21,
+  B → 2025-09-06, C from 2025-09-06, sealed. Unseal = `POST /api/holdout/unseal` (typed family
+  name + reason; one per family, enforced by a unique index).
+- **Ledger** in PostgreSQL `ci`: every distinct spec per family = one trial; runs indexed;
+  jobs survive page reloads (not API restarts — interrupted jobs are marked failed at start).
+  Run files: `storage/research/runs/<run_id>/run.json` (+ `trades.parquet`), git-ignored.
+- **Pages**: Strategy Lab (Visual Builder with live validation, signal counts per tier,
+  signals on the chart, templates; AI Discovery / Chart-Based Creator show their phase),
+  Backtest (3 scenarios, equity, cost breakdown, bootstrap / Monte Carlo / cost stress,
+  breakdowns, month strip, paginated trades with M1 replay), Optimize (≤ 3 params, ≤ 400
+  variants, heatmap, plateau/spike, Deflated Sharpe of the winner), Validate (§15 checklist
+  with reasons, tiers, walk-forward, ambiguity sensitivity, stability, holdout unseal),
+  My Strategies (library, favourites, families with trial counts and holdout status).
+- **First real results** (honest, not promising): the "three-candle reversal" example on
+  tier A: −0.005 R before costs, **−0.288 R** after pessimistic costs over 23,132 trades;
+  rejected on 7 criteria; 0 of 13 walk-forward windows positive. A 25-variant stop/target
+  grid shows wider stops lose less (costs are a smaller share of 1 R) — no variant positive.
+  Costs (spread + slippage + $7 unconfirmed commission ≈ 0.28 R/trade at 1-ATR stops)
+  dominate short-horizon M5 ideas; this is the main lesson to carry into Phase 7–8.
+- A research note (id 1) in `ci.research_notes` records the checklist readings (positive-
+  bucket stability, literal DSR gate, A-and-B rule) before any promotion decision.
+
+**The owner's :8000 API was started before Phases 4–6** — restart it (`ci-api`) so the new
+pages work on :3000.
+
 ## 7. Start-of-session checklist
 
 ```powershell
@@ -161,4 +201,6 @@ docker compose up -d                          # Postgres
 .venv\Scripts\ci-ingest status                # MT5 connected? safety warnings?
 .venv\Scripts\python -m pytest                # must be green before new work
 .venv\Scripts\ci-api                          # then: npm --prefix apps/web run dev
+# research ledger reachable? (creates its tables on first use)
+.venv\Scripts\python -c "from candle_intel.research.ledger import default_ledger; print(default_ledger().families())"
 ```

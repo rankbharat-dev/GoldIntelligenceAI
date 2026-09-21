@@ -13,6 +13,7 @@ import {
   type ISeriesMarkersPluginApi,
   type LogicalRange,
   type MouseEventParams,
+  type SeriesMarker,
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
@@ -76,9 +77,23 @@ interface Props {
   /** Open time (UTC epoch s) of the selected bar on this timeframe, marked on the chart. */
   selected?: number | null;
   onSelect?: (time: number) => void;
+  /** Extra markers (trades, signals). Times are snapped to the bar that contains them. */
+  markers?: ChartMarker[];
+  /** Open the chart around this UTC epoch second instead of the latest bars. */
+  anchor?: number | null;
 }
 
-export function CandleChart({ timeframe, zone, selected = null, onSelect }: Props) {
+export interface ChartMarker {
+  time: number;
+  position: "aboveBar" | "belowBar" | "inBar";
+  shape: "arrowUp" | "arrowDown" | "circle" | "square";
+  color: string;
+  text?: string;
+}
+
+const TF_SECONDS: Record<Timeframe, number> = { M1: 60, M5: 300, M15: 900, H1: 3600 };
+
+export function CandleChart({ timeframe, zone, selected = null, onSelect, markers, anchor = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -154,13 +169,19 @@ export function CandleChart({ timeframe, zone, selected = null, onSelect }: Prop
 
   // ---------------------------------------------------------------- selected bar marker
   useEffect(() => {
-    const has = selected != null && barsRef.current.candles.some((b) => b.time === selected);
-    markersRef.current?.setMarkers(
-      has
-        ? [{ time: selected as UTCTimestamp, position: "belowBar", shape: "arrowUp", color: "#f59e0b", text: "features" }]
-        : [],
-    );
-  }, [selected, loadedCount]);
+    const times = new Set(barsRef.current.candles.map((b) => b.time as number));
+    const out: SeriesMarker<Time>[] = [];
+    if (selected != null && times.has(selected)) {
+      out.push({ time: selected as UTCTimestamp, position: "belowBar", shape: "arrowUp", color: "#f59e0b", text: "features" });
+    }
+    const step = TF_SECONDS[timeframe];
+    for (const m of markers ?? []) {
+      const t = m.time - (m.time % step);
+      if (times.has(t)) out.push({ ...m, time: t as UTCTimestamp });
+    }
+    out.sort((a, b) => (a.time as number) - (b.time as number));
+    markersRef.current?.setMarkers(out);
+  }, [selected, loadedCount, markers, timeframe]);
 
   // ---------------------------------------------------------------- time zone
   useEffect(() => {
@@ -249,7 +270,10 @@ export function CandleChart({ timeframe, zone, selected = null, onSelect }: Prop
   useEffect(() => {
     tfRef.current = timeframe;
     let cancelled = false;
-    fetchCandles(timeframe, undefined, PAGE)
+    const step = TF_SECONDS[timeframe];
+    // With an anchor, load a page that ends ~300 bars after it so both sides are visible.
+    const before = anchor != null ? anchor + 300 * step : undefined;
+    fetchCandles(timeframe, before, PAGE)
       .then((r) => {
         if (cancelled) return;
         const bars = toBars(r);
@@ -257,7 +281,12 @@ export function CandleChart({ timeframe, zone, selected = null, onSelect }: Prop
         candleRef.current?.setData(bars.candles);
         volumeRef.current?.setData(bars.volume);
         const n = bars.candles.length;
-        chartRef.current?.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 180), to: n + 6 });
+        let idx = n;
+        if (anchor != null) {
+          const i = bars.candles.findIndex((b) => (b.time as number) >= anchor - (anchor % step));
+          if (i >= 0) idx = i + 60;
+        }
+        chartRef.current?.timeScale().setVisibleLogicalRange({ from: Math.max(0, idx - 180), to: idx + 6 });
         setLoadedCount(n);
         setFailure(null);
         setReadyTf(timeframe);
@@ -269,7 +298,7 @@ export function CandleChart({ timeframe, zone, selected = null, onSelect }: Prop
     return () => {
       cancelled = true;
     };
-  }, [timeframe]);
+  }, [timeframe, anchor]);
 
   useEffect(() => {
     const chart = chartRef.current;

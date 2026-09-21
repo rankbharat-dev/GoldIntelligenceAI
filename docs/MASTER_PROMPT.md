@@ -20,6 +20,7 @@ record them.
    hygiene, §6 costs (+ 2026-09-21 implementation note), §7 leakage, §9 multiple testing,
    §15 pre-committed success thresholds, Appendix A open items.
 4. `docs/requirements/` — the owner's own words, dated. Newest:
+   `2026-09-21_phases-4-6-and-hybrid-assistant.md` (hybrid AI Assistant, API key in `.env`),
    `2026-09-21_ui-redesign-research-workspace.md` (UI look + navigation, reference image
    `new_reference_image.png`), then `2026-09-21_strategy-research-engine.md`.
 
@@ -96,14 +97,16 @@ holdout, or drop costs to make a result look better.
 | UI | Every phase ships its own page; the owner must be able to do everything from the dashboard. |
 | UI look | `new_reference_image.png`: dark + gold, left sidebar, **chart-first** Overview. Shell built 2026-09-21. |
 | Honest UI | Nothing invented on screen: a panel shows an engine-produced number (with source) or an empty state naming the phase that fills it. Unbuilt sidebar items are disabled with their phase. |
-| AI orchestrator | Claude Code / Desktop drives the engine through tools; Python does all numbers. In-page chat (API key or not) = open question Q-UI1, default "no API". |
+| AI orchestrator | Claude Code / Desktop drives the engine through tools; Python does all numbers. |
+| AI Assistant | **Hybrid** (owner, 2026-09-21): no-API mode via Claude Code / Desktop **and** API mode — a dashboard chat through the owner's AgentRouter key (`.env`: `CI_LLM_*`, default model `claude-opus-5`, fast `deepseek-v4-flash`). AgentRouter is third-party: send only questions, specs and results; never secrets or sealed data. Either mode only *proposes* (`created_by="assistant"`); nothing bypasses §9/§15. |
 
 ## 6. Target product — the dashboard (localhost)
 
 Look and navigation follow `new_reference_image.png` (requirement 2026-09-21 night). The
 shell (sidebar, top bar, gold theme) exists; each page below lights up in its phase.
-Built so far: **Overview** (`/`, chart + click-a-candle features panel + data health),
-**Data Center** (`/costs`).
+Built so far: **Overview** (`/`), **Data Center** (`/costs`), **Strategy Lab · Visual Builder**
+(`/strategy-lab`), **Backtest** (`/backtest`), **Optimize** (`/optimize`), **Validate**
+(`/validate`), **My Strategies** (`/strategies`), job tray in the header.
 
 | Sidebar item | Phase | Tools on it |
 |---|---|---|
@@ -116,7 +119,7 @@ Built so far: **Overview** (`/`, chart + click-a-candle features panel + data he
 | **Validate** | 6 | *Strategy Validation Lab*: in-sample (A) / out-of-sample (B) / walk-forward, Monte Carlo reshuffle + bootstrap CIs, cost-stress slider, regime stability, §15 checklist; holdout (C) unseal — explicit, logged, one-time. |
 | **Research Pipeline** | 8 | *Autonomous Research Pipeline*: define a search (blocks, ranges, objective, trial + time budget); hypotheses → pre-registration → tests → **accepted and rejected** records with reasons; live progress, pause/resume, overnight runs; trial counter and how it raises the bar. |
 | **My Strategies** | 5, 8 | Library: specs, versions, clone/compare, run history, candidates leaderboard with §15 pass/fail per criterion, strategy families, favourites. |
-| **AI Assistant** | 10 | Idea in Hinglish → proposed spec (owner reviews before running); plain-language explanation of any result; chart observations. Orchestrated by Claude Code / Desktop (Q-UI1). Never sees Tier C; never bypasses guardrails. |
+| **AI Assistant** | 10 | Hybrid: no-API (Claude Code / Desktop through engine tools) + API (dashboard chat via AgentRouter). Idea in Hinglish → proposed spec (owner reviews before running); plain-language explanation of any result; chart observations. Never sees Tier C; never bypasses guardrails. |
 | *(later)* Risk & Sizing, Paper Trading, Research Journal | 10–11 | Position size / risk of ruin / lot rounding; live read-only signals with drift monitor; pre-registrations, notes, threshold-change log. |
 
 ## 7. Architecture additions
@@ -148,8 +151,10 @@ Built so far: **Overview** (`/`, chart + click-a-candle features panel + data he
 
 ## 8. Roadmap (revised — replaces blueprint §16 order; exit conditions still apply)
 
-Status: Phases 0–3 **done** (foundation, data engine + Chart Viewer, cost model + Costs page,
-feature store + candle-click features panel — leakage gate passed 2026-09-21).
+Status: Phases 0–6 **done** (foundation, data engine + Chart Viewer, cost model + Costs page,
+feature store + features panel, strategy spec + event-driven backtester, Strategy Lab +
+Backtest + My Strategies, jobs + Optimize + Validate with walk-forward and the sealed
+holdout — all 2026-09-21). Next: Phase 7.
 
 | # | Phase | Deliverable | UI shipped | Exit condition |
 |---|---|---|---|---|
@@ -194,21 +199,21 @@ needs ticks and the commission figure.
 | A1c | Investor-password login on the terminal (optional safety). |
 | A5 | Economic news calendar source for slippage windows (Phase 6+). |
 | A8 | Holiday / early-close calendar (≈ 17 of 274 weeks close early) — can share A5's source. |
-| Q-UI1 | In-page AI Assistant: (a) no API key — chat in Claude Code/Desktop, results shown in the UI (default), or (b) chat box in the dashboard with a Claude API key (paid per use). |
+| ~~Q-UI1~~ | Resolved 2026-09-21: **hybrid** — both modes (requirement `2026-09-21_phases-4-6-and-hybrid-assistant.md`). |
 
 ## 11. First task of the next session
 
-Phase 3 is done (HANDOFF §6b). Start **Phase 4 — Strategy spec + Backtester**:
-- `src/candle_intel/strategy/`: versioned, hashed Pydantic spec — `entry` (conditions over
-  feature names from `features/registry.py`, e.g. `dirs_3 == "DDU" and close_loc > 0.7`),
-  `filters` (session, `vol_regime`, `hyg_no_entry` always on), `exit` (ATR stop/target, time
-  exit), `sizing` (fixed R), `meta` (family, hypothesis, pre-registration id).
-- `src/candle_intel/backtest/`: event-driven; decide at M5 close reading features **only via
-  `FeatureStore`**; fill at the next M5 open; resolve stops/targets on the M1 path
-  (pessimistic ambiguity policy, ambiguity rate reported); spread per bar from `M5_costs`
-  for all three scenarios + `costs/execution.py` slippage/commission/swap; deterministic.
-- Chronological A/B/C split (§9.1), trial counter per family in PostgreSQL, holdout sealed.
-- Tests: hand-checked trades, cost reconciliation, determinism, a synthetic planted-edge
-  run, and the shifted-target canary (§7.2).
-- API endpoints to run a spec and return trades/metrics (UI comes in Phase 5).
+Phases 4–6 are done (HANDOFF §6d). Start **Phase 7 — Structure & Patterns**:
+- `src/candle_intel/structure/`: causal swing points (confirmed only after k bars — the
+  confirmation delay is the `available_at`), S/R levels (clustered swing prices with touch
+  counts), trendlines / channels (RANSAC on confirmed swings), liquidity sweeps (wick beyond
+  a prior swing, close back inside), first behaviours of blueprint §17 — each detection with
+  exact coordinates and `available_at`; all added to the feature store as new columns so
+  they become Strategy Lab conditions automatically.
+- Leakage suite extended to every structure feature (recomputation on truncated history).
+- UI: overlays on the Overview chart; **Behaviour Explorer** page (feature distributions by
+  year / session / regime + "what happened next" event study with costs); **Chart-Based
+  Creator** (mark a structure on the chart → spec draft).
+- Pre-register the first behaviours (§9.2) before looking at their outcomes.
+- A8 (early-close calendar) fits here.
 - Explain it to the owner in simple Hinglish when done.

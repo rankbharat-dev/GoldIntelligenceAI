@@ -21,6 +21,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { JobTray } from "@/components/research/jobs";
 import { fetchSummary } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -39,12 +40,12 @@ const NAV: NavItem[] = [
   { label: "Overview", hint: "Chart workspace", icon: LayoutDashboard, href: "/" },
   { label: "Data Center", hint: "Data health · costs", icon: Database, href: "/costs" },
   { label: "Behaviour Explorer", hint: "Sequences · regimes · S/R", icon: ScanSearch, phase: 7 },
-  { label: "Strategy Lab", hint: "AI · Visual · From chart", icon: FlaskConical, phase: 5 },
-  { label: "Backtest", hint: "Test performance", icon: History, phase: 5 },
-  { label: "Optimize", hint: "Parameter tuning", icon: SlidersHorizontal, phase: 6 },
-  { label: "Validate", hint: "Out-of-sample · robustness", icon: ShieldCheck, phase: 6 },
+  { label: "Strategy Lab", hint: "AI · Visual · From chart", icon: FlaskConical, href: "/strategy-lab" },
+  { label: "Backtest", hint: "Test performance", icon: History, href: "/backtest" },
+  { label: "Optimize", hint: "Parameter tuning", icon: SlidersHorizontal, href: "/optimize" },
+  { label: "Validate", hint: "Out-of-sample · robustness", icon: ShieldCheck, href: "/validate" },
   { label: "Research Pipeline", hint: "Hypotheses · runs", icon: Workflow, phase: 8 },
-  { label: "My Strategies", hint: "Library · versions", icon: Library, phase: 5 },
+  { label: "My Strategies", hint: "Library · versions · trials", icon: Library, href: "/strategies" },
   { label: "AI Assistant", hint: "Ideas · explanations", icon: Bot, phase: 10 },
 ];
 
@@ -193,6 +194,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="mr-auto hidden text-[11px] tracking-[0.25em] text-muted-foreground italic md:block">
             PAST DATA · NEW IDEAS · HONEST EDGE
           </p>
+          <JobTray />
           <span className="rounded-md border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary">XAUUSD</span>
           <DataRange />
         </header>

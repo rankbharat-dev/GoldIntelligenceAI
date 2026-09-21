@@ -17,6 +17,7 @@ storage/features/
 storage/models/
 storage/experiments/
 storage/reports/
+storage/research/runs/
 mlruns/
 
 # node

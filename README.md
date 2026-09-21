@@ -16,7 +16,7 @@ execution. Independent of Shiibaa.
 
 ## Status
 
-**Phases 1–3 (data engine, cost model, feature store) — built and running on Exness-MT5Trial7 (demo).**
+**Phases 1–6 (data engine, cost model, feature store, strategy spec + backtester, Strategy Lab / Backtest / Optimize / Validate) — built and running on Exness-MT5Trial7 (demo).**
 
 | Piece | State |
 |---|---|
@@ -25,9 +25,10 @@ execution. Independent of Shiibaa.
 | Cost model (`ci-costs build`) | Spread per M1/M5 bar (measured / modeled), 3 scenarios, slippage, commission, swap; validated out-of-sample |
 | Feature store (`ci-features build`) | 90 features per M5 bar (anatomy, sequence, volatility, DST-aware sessions, daily, M15/H1 context, spread, §5.3 hygiene), each row with `available_at`; build blocked unless the leakage self-check passes |
 | Research API (`ci-api`) | Candles with scroll-back paging, dataset summary, cost model / heatmap / spread levels, feature set + one bar's features |
-| Web app (`apps/web`) | Chart Viewer (candles, timeframe + time zone, **click a candle → features panel**, data health) · Costs page (spread heatmap, tiers, scenarios) |
+| Backtester | Strategy spec (`strategy-spec/1`), event-driven engine (M5 decisions, M1 fills, 3 cost scenarios), frozen A/B/C split with a sealed holdout, trial counting per family, Deflated Sharpe, bootstrap, Monte Carlo, cost stress, walk-forward, §15 checklist |
+| Web app (`apps/web`) | Dark-gold research workspace: Overview (chart + features panel), Data Center (costs), Strategy Lab (visual builder), Backtest, Optimize, Validate, My Strategies, job tray |
 
-Next: Phase 4 — strategy spec + event-driven backtester (see [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) §8).
+Next: Phase 7 — structure & patterns, Behaviour Explorer, Chart-Based Creator (see [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) §8).
 
 ## Setup (Windows)
 

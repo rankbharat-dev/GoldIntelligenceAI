@@ -58,8 +58,10 @@ class Settings(BaseSettings):
     # --- Storage -------------------------------------------------------------
     storage_root: Path = PROJECT_ROOT / "storage"
     postgres_dsn: SecretStr = SecretStr(
-        "postgresql+psycopg://candle:candle@localhost:5434/candle_intelligence"
+        "postgresql+psycopg://candle:candle@127.0.0.1:5434/candle_intelligence"
     )
+    # Research ledger (trials, runs, holdout log, jobs). Default: the PostgreSQL above.
+    research_db_url: SecretStr | None = None
 
     @field_validator("mt5_broker_symbol")
     @classmethod

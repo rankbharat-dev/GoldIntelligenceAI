@@ -472,6 +472,70 @@ platform's reports.
 
 ---
 
+### Implementation note — 2026-09-21 (Phases 4–6: `strategy/`, `backtest/`, `research/`, `statistics/robust.py`)
+
+**Strategy spec** (`strategy/spec.py`, `strategy-spec/1`): Pydantic, strict. `entries` (1–4 rules;
+AND of 1–12 conditions `feature op value` over registry features; `hyg_no_entry` cannot be a
+condition because it is always enforced), `filters` (sessions, vol regimes, UTC hours,
+weekdays, max `spread_rel`), `exit` (stop, target, time exit in M5 bars, trailing, flat
+before the weekend — distances in ATR(14) of the decision bar), `sizing` (fixed-fractional
+risk %), `meta` (name, **family**, hypothesis, created_by). `spec_hash` = SHA-256 of the
+rules + family (name and notes excluded). A bar where a long and a short rule both fire is
+skipped.
+
+**Execution timing** (`backtest/engine.py`): decision at the M5 close (`available_at`),
+market entry at the **first M1 open at or after it** (dropped if more than 5 minutes later —
+market closed). This is one M1 bar sooner than the "next M5 open" in the Phase-4 task text
+and equally causal; it is what a live system would do. Long buys the ask (bid + scenario
+spread) + market slippage; short sells the bid − slippage. Stops/targets resolve on the M1
+path from the entry bar (§7.3): long exits on the bid, short on the ask; both reachable in
+one M1 bar → ambiguity policy (pessimistic = stop) and the trade is flagged; a bar opening
+through the stop fills at its open (gap) + stop slippage; targets are limit orders at their
+price. Time exit, Friday 16:50 NY flat and end-of-tier exits are market orders. One position
+at a time. Commission per lot and swap (17:00 NY rollovers, triple day) come from
+`costs/execution.py`; spread per M1 bar from the cost model's `M1_costs`. Every trade stores
+r_net, r before costs and each cost component in R. If simulated equity reaches zero the USD
+path stops (R results continue) and the run reports `ruined_at`.
+
+**Split** (`backtest/split.py`): A/B/C = 60/20/20 % of the research window, cut at UTC midnight,
+**frozen** in `storage/research/split.json` on first use (committed to git as the public
+pre-commitment): A 2021-07-05 → 2024-08-21, B → 2025-09-06, C from 2025-09-06 (open-ended —
+data added later is unseen and extends C). "AB" = A∪B continuous, used by Validate.
+Explicit windows (walk-forward folds) may never reach into C.
+
+**Trials** (`research/ledger.py`, PostgreSQL schema `ci`, created by SQLAlchemy on first use):
+`research_trials` has one row per (family, spec_hash) ever evaluated — the trial count is
+derived from it, so re-running an identical spec is not a new trial and any change to its
+rules is. Optimisation and walk-forward variants are recorded too. `holdout_access_log`
+has a unique index on family: the second unseal fails in the database, not only in code.
+Tier C is readable only by the one spec named in that family's unseal row.
+
+**Selection statistics** (`statistics/robust.py`): Deflated Sharpe on per-trade Sharpe with
+V[SR] across the family's recorded trials (fallback: sampling variance when < 2); §15 gate
+read literally as SR − SR0 > 0, probability also reported. Stationary bootstrap CI (mean
+block n^⅓, 2,000 draws), Monte Carlo reshuffle drawdown, linear cost stress (break-even
+extra spread / commission). Fixed seeds → reproducible.
+
+**§15 reading** (`research/checklist.py`): expectancy, PF and drawdown at pessimistic costs
+must hold on **both** A and B; stability, ambiguity and Deflated Sharpe on A∪B; **stability =
+share of year / session buckets (≥ 10 trades) with positive expectancy** — "same-signed"
+refers to the edge, which is a profit; a rule that loses in every bucket is not stable in
+the sense §10 means. Holdout items stay pending until the family's unseal. Any failure →
+rejected; any pending → not a candidate.
+
+**Walk-forward** (`research/validate.py`): rolling 12-month train / 3-month test over A∪B.
+With a grid: re-optimise on each train window (pessimistic expectancy, ≥ 30 trades), trade the
+winner on the test window; without: the fixed spec per window. Only test windows count.
+
+**Truth tests**: hand-checked trades (`tests/unit/test_backtest.py`: target, slippage, short
+stop on the ask, ambiguity policies, gap, time exit, trailing, hygiene, tier boundary,
+commission + triple swap), synthetic random walk (`tests/leakage/test_backtest_leakage.py`):
+honest rule ≈ 0 edge before costs (0.013 R) vs the same rule fed a feature shifted from the
+future (0.68 R) — the shifted-target canary; a planted +1.5 ATR drift after DDU is found
+(0.37 R vs 0.04 R control) and its mirror loses; entries never precede decisions; runs are
+deterministic. Real data: tier A backtest of a 2-rule spec over 5 years ≈ 4 s for three
+scenarios.
+
 ## 10. Regime and Stability Analysis (closes gap 6)
 
 A shorter MT5 history partially mitigates the regime-mixing problem, but does not remove it.
@@ -761,4 +825,4 @@ an edge at all.
 | A5 | Economic-news calendar for widened stop slippage (hook exists: `slippage_points(in_window=...)`; only the rollover window is flagged today) | Phase 7 |
 | A6 | Refit slippage parameters from simulated-vs-live fills | Phase 9 |
 | A7 | Owner will trade on an **Exness Raw Spread** account (2026-09-21). Open a Raw Spread demo so its ticks calibrate a Raw cost profile; promotion uses that profile. Roadmap order revised in `docs/MASTER_PROMPT.md` | Raw cost profile |
-| A8 | Holiday / early-close calendar so the last bars before an early close (≈ 17 of 274 weeks) are flagged like `hyg_week_last3`; can share a source with A5 | Phase 4 |
+| A8 | Holiday / early-close calendar so the last bars before an early close (≈ 17 of 274 weeks) are flagged like `hyg_week_last3`; can share a source with A5. Not yet built — the backtester's flat-before-weekend rule uses the regular Friday 16:50 NY only | Phase 7 |
