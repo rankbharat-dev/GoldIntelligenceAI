@@ -240,6 +240,14 @@ across the dataset. Store it per dataset version.
 - Bars whose spread exceeds the p99 of their hour-of-day distribution are flagged
   `abnormal_spread` and excluded from entry.
 
+*As built (Phase 3, 2026-09-21):* `hyg_rollover` = bar inside 16:45–18:30 New York (covers
+the rollover bar, the daily break and the bars after it); `hyg_week_first3` = first 3 bars
+after a gap > 24 h; `hyg_week_last3` = Friday 16:45–17:00 New York (the week closed at
+16:55 NY in 257 of 274 weeks); `hyg_abnormal_spread` against a *trailing* per-hour p99
+(§7 note); `hyg_no_entry` = any of the four. `hyg_spans_weekend_gap` marks bars whose
+20-bar lookback crosses a weekend. Holiday early closes (≈ 17 weeks, e.g. Friday 13:25 NY)
+are not covered by the calendar rule — Appendix A8.
+
 ### 5.4 DST-aware sessions (new — corrects v1.0)
 
 v1.0's "hour, London/NY overlap" as fixed UTC hours is wrong for roughly half the year.
@@ -340,6 +348,41 @@ the platform.
   features computed on the full history and then filtered to `T`.
 - **No-live-call assertion** — research modules are import-checked to ensure they cannot
   reach the MT5 gateway or the MCP server (§3.1).
+
+### Implementation note — 2026-09-21 (Phase 3, `src/candle_intel/features/`, `ci-features`)
+
+- **Rows.** One row per M5 bar: `event_time` = bar open (UTC), `available_at` = bar close
+  (`event_time + 5 min`). 90 features in 9 groups (anatomy, sequence, volatility, session,
+  daily, M15, H1, spread, hygiene), catalogued in `features/registry.py` with unit, meaning
+  and *timing* (`bar_close`, `bar_open`, `calendar`, `htf_close`). Scale: ATR(14) of the
+  previous M5 bars, so values compare across the 1,800 → 4,400 price history.
+- **Higher timeframes** join as-of the last M15 / H1 bar whose **close** ≤ `available_at`
+  (the M5 bar 10:55 sees the 10:00 H1 bar; 10:50 sees 09:00). Rows carry
+  `m15_close_utc` / `h1_close_utc` for audit.
+- **No whole-history statistic.** Two Phase-2 quantities use the full history and are
+  therefore *not* used as features: the cost model's volatility terciles and its
+  `abnormal_spread` threshold (a full-history p99 per hour). The feature store recomputes
+  both causally: volatility regime = `vol_ratio` vs terciles of the 365 days *before* each
+  calendar month; abnormal spread = a minute's spread ÷ its trailing ~5-day median above the
+  trailing p99 of the same UTC hour over the previous ~60 trading days (current minute
+  excluded). On the real data the causal flag marks 4,416 M5 bars (1.2 %); a new, higher
+  broker tier reads as abnormal for a few days until the trailing median catches up — in
+  real time nobody knows yet that the tier will last, so this is intended.
+- **Leakage suite = 7.2 as built.** `features/leakage.py`: *recomputation* (history known at
+  `T` = M1 bars closed by `T`, re-aggregated, so M15/H1 are still forming) and *future
+  perturbation* (all prices, volumes and spreads after `T` replaced) must leave every row
+  with `available_at ≤ T` unchanged; *availability audit* checks the row contract. On a
+  synthetic history with the real calendar (US and UK DST switches, daily break, weekends,
+  spikes) five deliberately leaky features — next-bar return, centred mean, whole-history
+  z-score, H1 joined on its open time, full-day high — are each caught **by name**.
+  `ci-features build` repeats recomputation + perturbation on the real history (5 Wednesday
+  cut points, mid-bar) and writes nothing if a single value changes. The access wrapper
+  `features/store.py` (`FeatureStore.as_of / latest / bar`) returns only rows with
+  `available_at ≤ decision time` and raises `LookAheadError` otherwise. The
+  shifted-target canary needs labels/backtests and is added in Phase 4.
+- **Output.** `<derived>/features/<feature_set_id>/features_M5.parquet` + `feature_set.json`
+  (schema, config + hash, lineage, self-check, summary, SHA-256). Rebuilding the same
+  inputs reproduced the same file hash.
 
 ### 7.3 M1 as execution truth (closes gap 3)
 
@@ -718,3 +761,4 @@ an edge at all.
 | A5 | Economic-news calendar for widened stop slippage (hook exists: `slippage_points(in_window=...)`; only the rollover window is flagged today) | Phase 7 |
 | A6 | Refit slippage parameters from simulated-vs-live fills | Phase 9 |
 | A7 | Owner will trade on an **Exness Raw Spread** account (2026-09-21). Open a Raw Spread demo so its ticks calibrate a Raw cost profile; promotion uses that profile. Roadmap order revised in `docs/MASTER_PROMPT.md` | Raw cost profile |
+| A8 | Holiday / early-close calendar so the last bars before an early close (≈ 17 of 274 weeks) are flagged like `hyg_week_last3`; can share a source with A5 | Phase 4 |

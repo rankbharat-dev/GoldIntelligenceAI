@@ -16,17 +16,18 @@ execution. Independent of Shiibaa.
 
 ## Status
 
-**Phases 1–2 (data engine, cost model) — built and running on Exness-MT5Trial7 (demo).**
+**Phases 1–3 (data engine, cost model, feature store) — built and running on Exness-MT5Trial7 (demo).**
 
 | Piece | State |
 |---|---|
 | Raw ingestion (`ci-ingest raw`) | M1 2021-07 → now (1.84 M bars), broker M5/M15/H1 reference, 223 days of ticks (70.8 M) |
 | Data build (`ci-data build`) | Clock inferred (UTC+0), quality gate passed, M5/M15/H1 match broker bars 100 % |
 | Cost model (`ci-costs build`) | Spread per M1/M5 bar (measured / modeled), 3 scenarios, slippage, commission, swap; validated out-of-sample |
-| Research API (`ci-api`) | Candles with scroll-back paging, dataset summary, cost model / heatmap / spread levels |
-| Web app (`apps/web`) | Chart Viewer (candles, timeframe + time zone, data health) · Costs page (spread heatmap, tiers, scenarios) |
+| Feature store (`ci-features build`) | 90 features per M5 bar (anatomy, sequence, volatility, DST-aware sessions, daily, M15/H1 context, spread, §5.3 hygiene), each row with `available_at`; build blocked unless the leakage self-check passes |
+| Research API (`ci-api`) | Candles with scroll-back paging, dataset summary, cost model / heatmap / spread levels, feature set + one bar's features |
+| Web app (`apps/web`) | Chart Viewer (candles, timeframe + time zone, **click a candle → features panel**, data health) · Costs page (spread heatmap, tiers, scenarios) |
 
-Next: Phase 3 — feature store with `available_at` and the leakage suite as a hard gate.
+Next: Phase 4 — strategy spec + event-driven backtester (see [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) §8).
 
 ## Setup (Windows)
 
@@ -58,6 +59,9 @@ docker compose up -d                   # PostgreSQL 17 on 127.0.0.1:5434
 .venv\Scripts\ci-data list
 .venv\Scripts\ci-costs build                       # newest dataset -> validated cost model (~2.5 min)
 .venv\Scripts\ci-costs list
+.venv\Scripts\ci-features build                   # newest dataset -> leakage-checked M5 features (~20 s)
+.venv\Scripts\ci-features list
+.venv\Scripts\ci-features show --time 2026-09-18T14:05   # one bar's features (bar open, UTC)
 .venv\Scripts\ci-api                               # research API on http://127.0.0.1:8000
 npm --prefix apps/web run dev                       # web app on http://localhost:3000 (/ and /costs)
 .venv\Scripts\python -m pytest                     # unit + leakage (no MT5 needed)

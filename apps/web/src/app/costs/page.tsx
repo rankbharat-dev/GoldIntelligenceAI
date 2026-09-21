@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { AppNav } from "@/components/app-nav";
 import { LevelChart } from "@/components/costs/level-chart";
 import { SpreadHeatmap } from "@/components/costs/spread-heatmap";
 import { Badge } from "@/components/ui/badge";
@@ -224,14 +223,11 @@ export default function CostsPage() {
   const { data: m, isLoading, error } = useQuery({ queryKey: ["cost-model"], queryFn: () => fetchCostModel() });
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5">
-        <div className="mr-auto">
-          <h1 className="text-sm font-semibold tracking-tight">Candle Intelligence</h1>
-          <p className="text-xs text-muted-foreground">XAUUSD · Costs · spread, slippage, swap — what an edge must survive</p>
-        </div>
-        <AppNav />
-      </header>
+    <div className="flex flex-col">
+      <div className="px-4 pt-3">
+        <h1 className="text-base font-semibold">Data Center · Costs</h1>
+        <p className="text-xs text-muted-foreground">Spread, slippage, swap — what an edge must survive</p>
+      </div>
 
       {error && (
         <div className="p-4">

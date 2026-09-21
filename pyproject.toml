@@ -54,6 +54,7 @@ ci-mt5-mcp = "ci_mt5_mcp.server:main"
 ci-ingest = "candle_intel.ingest.cli:main"
 ci-data = "candle_intel.data.build:main"
 ci-costs = "candle_intel.costs.build:main"
+ci-features = "candle_intel.features.build:main"
 ci-api = "ci_api.main:main"
 
 [build-system]

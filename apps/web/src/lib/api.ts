@@ -184,3 +184,72 @@ export function fetchCostHeatmap(
 export function fetchCostLevels(dataset = "latest") {
   return getJson<CostLevels>(`/api/costs/${encodeURIComponent(dataset)}/levels`);
 }
+
+// ---------------------------------------------------------------- features (Phase 3)
+
+export type FeatureTiming = "bar_close" | "bar_open" | "calendar" | "htf_close";
+export type FeatureValue = number | string | boolean | null;
+
+export interface FeatureSpec {
+  name: string;
+  group: string;
+  unit: string;
+  timing: FeatureTiming;
+  description: string;
+  dtype: string;
+}
+
+export interface FeatureSetInfo {
+  feature_set_id: string;
+  feature_version: string;
+  dataset_id: string;
+  companion_cost_model_id: string | null;
+  row_semantics: string;
+  built_utc: string;
+  code_version: { git_commit: string | null; dirty: boolean };
+  config_hash: string;
+  groups: Record<string, string>;
+  schema: FeatureSpec[];
+  leakage_selfcheck: {
+    passed: boolean | null;
+    cutoffs_utc?: string[];
+    recomputation_mismatches?: Record<string, number>;
+    perturbation_mismatches?: Record<string, number>;
+    availability_audit?: Record<string, number>;
+  };
+  summary: { rows: number; research_rows: number; hygiene_bars: Record<string, number> };
+}
+
+export interface FeatureBar {
+  dataset_id: string;
+  feature_set_id: string;
+  tf: Timeframe;
+  requested_time: number;
+  mapped: boolean;
+  meta: {
+    event_time: number; // UTC epoch seconds, M5 bar open
+    available_at: number; // bar close
+    ts_server: number;
+    trading_day: string;
+    m15_close_utc: number | null;
+    h1_close_utc: number | null;
+  };
+  values: Record<string, FeatureValue>;
+  in_research_window: boolean;
+  costs: {
+    cost_model_id: string;
+    spread_source: "measured" | "modeled";
+    spread_optimistic: number;
+    spread_base: number;
+    spread_pessimistic: number;
+  } | null;
+}
+
+export function fetchFeatureSet(dataset = "latest") {
+  return getJson<FeatureSetInfo>(`/api/features/${encodeURIComponent(dataset)}`);
+}
+
+export function fetchFeatureBar(time: number, tf: Timeframe, dataset = "latest") {
+  const q = new URLSearchParams({ time: String(time), tf });
+  return getJson<FeatureBar>(`/api/features/${encodeURIComponent(dataset)}/bar?${q}`);
+}

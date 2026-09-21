@@ -1,6 +1,6 @@
 # Session Handoff — read this first
 
-Last updated: 2026-09-21 · End of Phase 2 · Owner communicates in Hinglish.
+Last updated: 2026-09-21 · End of Phase 3 + new UI shell · Owner communicates in Hinglish.
 
 > **Goal, target dashboard and the revised roadmap live in [MASTER_PROMPT.md](MASTER_PROMPT.md)**
 > (owner decisions of 2026-09-21: strategy research workbench + AI Research Engine, 5 years
@@ -45,7 +45,7 @@ Governing spec: [ARCHITECTURE_v1.2.md](ARCHITECTURE_v1.2.md). Library choices:
 | GitHub | https://github.com/rankbharat-dev/GoldIntelligenceAI — **public**; commits use `290257992+rankbharat-dev@users.noreply.github.com` |
 | Git policy | Commit / push only when the owner asks |
 
-## 4. What exists (Phases 0–2 complete)
+## 4. What exists (Phases 0–3 complete)
 
 | Component | Path | Command |
 |---|---|---|
@@ -53,11 +53,12 @@ Governing spec: [ARCHITECTURE_v1.2.md](ARCHITECTURE_v1.2.md). Library choices:
 | Ingestion CLI | `src/candle_intel/ingest/cli.py`, `bulk.py` | `ci-ingest status \| probe \| snapshot \| raw --ticks --tick-days 260` |
 | Data engine | `src/candle_intel/data/{clock,quality,aggregate,build}.py` | `ci-data build \| list` |
 | Cost model | `src/candle_intel/costs/{ticks,volatility,spread,execution,validate,build}.py` | `ci-costs build \| list` |
+| Feature store | `src/candle_intel/features/{registry,compute,leakage,store,build}.py` | `ci-features build \| list \| show --time <UTC>` |
 | Metadata DB | `src/candle_intel/db.py`, `infra/postgres/init/001_schema.sql` | `docker compose up -d` |
 | Research API | `services/api/ci_api/main.py` | `ci-api` → :8000 |
 | MCP server | `services/mt5_mcp/ci_mt5_mcp/server.py`, `.mcp.json` | stdio |
-| Web app | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5): `/` Chart Viewer, `/costs` Costs | `npm --prefix apps/web run dev` → :3000 |
-| Tests | `tests/{unit,leakage,integration}` | `pytest` (50 pass + 2 with `-m mt5`) |
+| Web app | `apps/web` (Next.js 16, shadcn base-nova, Lightweight Charts 5): `/` Chart Viewer (click a candle → features panel), `/costs` Costs | `npm --prefix apps/web run dev` → :3000 |
+| Tests | `tests/{unit,leakage,integration}`, shared synthetic gold-calendar history in `tests/conftest.py` | `pytest` (80 pass + 2 with `-m mt5`) |
 
 Data on disk (git-ignored, in `storage/`):
 - Raw `xauusd_exness-mt5trial7_20260921T071357Z`: M1 2021-07-01 → 2026-09-21 (1.84 M bars),
@@ -71,6 +72,11 @@ Data on disk (git-ignored, in `storage/`):
   `in_rollover_window`, `abnormal_spread`, `level_imputed`), `spread_cells`,
   `measured_minutes`, `level_daily`, `validation.json`, `cost_model.json`; row in `ci.cost_models`.
   (An earlier dirty-tree build `..._c20260921T074047Z` also exists; the API serves the newest.)
+- Feature set `exness-mt5trial7_f20260921T091144Z` in `<derived>/features/`: `features_M5.parquet`
+  (369,659 rows × 97 columns: 7 meta + 90 features) + `feature_set.json` (schema, config hash
+  `c0caee76c8d123b8`, leakage self-check **passed** at 5 cut points, summary, SHA-256
+  `ee4c8554…`). Built from a dirty tree before the Phase-3 commit; rebuild after committing
+  if a clean `code_version` is wanted (same inputs gave the same file hash).
 
 ## 5. Known data facts to carry forward
 
@@ -93,7 +99,7 @@ Data on disk (git-ignored, in `storage/`):
 - Clock inference wraps offsets to ±12 h so "New York + 7" brokers (break at 00:00 server
   time, next calendar day) work; covered by a synthetic UTC+2/+3 DST test.
 
-## 6. Phase 2 — Cost Model (done 2026-09-21) and what comes next
+## 6. Phase 2 — Cost Model (done 2026-09-21)
 
 Design and numbers: blueprint §6 "Implementation note — 2026-09-21". In short:
 modeled spread = bar level × time-weighted ratio quantile per (hour_utc, weekday, M5
@@ -107,13 +113,46 @@ Execution costs live in `costs/execution.py` (scalar functions the backtester wi
 Open items: A4 Raw-account commission, A5 news calendar, A6 slippage refit, A7 Raw Spread
 demo account for a Raw cost profile (blueprint Appendix A).
 
-**Next: Phase 3 — Feature Store (blueprint §7, hard gate).** Candle/sequence/context
-features in `src/candle_intel/features/`, every row carrying `available_at`; leakage suite
-in `tests/leakage/` must pass before any behaviour research. Useful inputs already in the
-cost tables: `atr_points` / `vol_ratio` (known at bar open), `abnormal_spread`,
-`in_rollover_window` (§5.3 hygiene exclusions). After that, follow the revised roadmap in
-[MASTER_PROMPT.md](MASTER_PROMPT.md) §8 (strategy spec + backtester → Strategy Builder UI →
-jobs/robustness → structure → Research Engine → Raw cost profile → ML/assistant → paper).
+## 6b. Phase 3 — Feature Store (done 2026-09-21) and what comes next
+
+Design: blueprint §7 "Implementation note — 2026-09-21 (Phase 3)" and §5.3 "As built".
+In short: one row per M5 bar, `event_time` = open, `available_at` = close; 90 features
+(anatomy, sequence, volatility, DST-aware sessions, NY-17:00 trading day, M15/H1 from the
+last *closed* bar, spread, §5.3 hygiene incl. `hyg_no_entry`). Nothing is fitted on the
+whole history: volatility regime and abnormal spread are recomputed causally (the cost
+table's versions use the full history and are **not** features). Research code must read
+features through `FeatureStore` (`as_of(T)` / `bar(t, decision_time)` → `LookAheadError`).
+
+Leakage gate: `tests/leakage/test_feature_leakage.py` (recomputation on truncated history,
+future perturbation, availability audit, 5 planted leaks caught by name, access wrapper);
+`ci-features build` repeats recomputation + perturbation on the real history and writes
+nothing on any mismatch. API: `GET /api/features/{dataset}` (schema, self-check, summary),
+`GET /api/features/{dataset}/bar?time=<epoch>&tf=<M1|M5|M15|H1>` (M1 → containing M5 bar;
+M15/H1 → the M5 bar that closes with it; includes the bar's cost-model spreads, labelled
+"not a feature"). UI verified desktop + 375 px phone, no console errors.
+
+Real-data facts: 4,416 M5 bars abnormal-spread (1.2 %), 11,771 in the rollover window,
+15,957 `hyg_no_entry` (4.3 %); sessions: asian 32 %, london 22 %, new_york 21 %,
+overlap 18 %, off 7 %. Holiday early closes are not flagged by `hyg_week_last3` (A8).
+
+**Next: Phase 4 — Strategy spec + Backtester** ([MASTER_PROMPT.md](MASTER_PROMPT.md) §8):
+Pydantic spec in `src/candle_intel/strategy/` (entry conditions over these feature names,
+filters incl. `hyg_no_entry`, exits, sizing, meta), event-driven engine in
+`src/candle_intel/backtest/` (decide on M5 close via `FeatureStore`, fill at next M5 open,
+resolve on M1, three cost scenarios from `M5_costs` + `costs/execution.py`, ambiguity rate),
+chronological A/B/C split + trial counting in PostgreSQL, the shifted-target canary.
+
+## 6c. New UI direction + app shell (2026-09-21 night)
+
+Owner supplied `new_reference_image.png` (dark + gold, sidebar, chart-first) and four must-have
+workspaces (Behaviour Explorer, Research Pipeline, Visual Pattern Intelligence, Validation Lab).
+Recorded in `requirements/2026-09-21_ui-redesign-research-workspace.md`; page ↔ phase map in
+MASTER_PROMPT §6. Built: gold theme tokens (`globals.css` `.dark`), `components/app-shell.tsx`
+(sidebar with every future page disabled + its phase, phone drawer, real dataset range and
+engine status), Overview = old Chart page + Strategy Lab entry cards (no invented numbers),
+Costs page renamed "Data Center · Costs" (`app-nav.tsx` removed). No backend change.
+**Rule for every new page: show engine-produced numbers or an honest empty state — never
+illustrative metrics.** Open owner question Q-UI1 (in-page AI chat with or without API key).
 
 ## 7. Start-of-session checklist
 

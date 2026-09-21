@@ -20,7 +20,8 @@ record them.
    hygiene, §6 costs (+ 2026-09-21 implementation note), §7 leakage, §9 multiple testing,
    §15 pre-committed success thresholds, Appendix A open items.
 4. `docs/requirements/` — the owner's own words, dated. Newest:
-   `2026-09-21_strategy-research-engine.md`.
+   `2026-09-21_ui-redesign-research-workspace.md` (UI look + navigation, reference image
+   `new_reference_image.png`), then `2026-09-21_strategy-research-engine.md`.
 
 Then run the **start-of-session checklist** (HANDOFF §7). Only start new work when it is green.
 
@@ -93,25 +94,30 @@ holdout, or drop costs to make a result look better.
 | Strategy builder | Form-based first (dropdowns / fields), visual block editor later. |
 | Engine autonomy | Both modes: "engine suggests → owner approves" and unattended overnight runs, always inside §9/§15. |
 | UI | Every phase ships its own page; the owner must be able to do everything from the dashboard. |
+| UI look | `new_reference_image.png`: dark + gold, left sidebar, **chart-first** Overview. Shell built 2026-09-21. |
+| Honest UI | Nothing invented on screen: a panel shows an engine-produced number (with source) or an empty state naming the phase that fills it. Unbuilt sidebar items are disabled with their phase. |
+| AI orchestrator | Claude Code / Desktop drives the engine through tools; Python does all numbers. In-page chat (API key or not) = open question Q-UI1, default "no API". |
 
 ## 6. Target product — the dashboard (localhost)
 
-Existing: **Chart** (`/`), **Costs** (`/costs`). To build, in roadmap order:
+Look and navigation follow `new_reference_image.png` (requirement 2026-09-21 night). The
+shell (sidebar, top bar, gold theme) exists; each page below lights up in its phase.
+Built so far: **Overview** (`/`, chart + click-a-candle features panel + data health),
+**Data Center** (`/costs`).
 
-| Page | Tools on it |
-|---|---|
-| **Chart / Candle Explorer** | Candles M1–H1, click a candle → its features, flags (rollover, abnormal spread, gaps), overlays: swings, S/R, trendlines, detections, trades. |
-| **Feature Explorer** | Distributions of any feature by year / session / volatility; "what happened next" event study for any condition (forward returns, MFE/MAE, hit rates, with costs). |
-| **Strategy Builder** | Build a strategy spec with forms: entry conditions (features, patterns, structure), filters (session, volatility, spread, news/rollover), exits (ATR stop/target, time exit, trailing, structure-based), sizing (fixed R / % risk). Live preview of entries on the chart; spec validation; versioning; clone/compare. |
-| **Backtest Lab** | Run any spec: equity curve in R and USD, drawdown, trade list with click-to-chart replay, all three cost scenarios side by side, cost breakdown (spread / commission / slippage / swap), results by year / month / session / weekday / volatility regime, intrabar ambiguity rate, spread-source share (measured vs modeled). |
-| **Robustness Lab** | Walk-forward, parameter-sensitivity heatmaps (is it a plateau or a spike?), Monte Carlo trade reshuffle + stationary bootstrap CIs, cost-stress slider (what spread/commission kills the edge?), regime stability. |
-| **Research Lab (AI Engine)** | Define a search: building blocks allowed, parameter ranges, objective, trial budget, time budget. Watch progress live; pause/resume; overnight runs. See the trial counter and how it raises the bar. |
-| **Candidates** | Leaderboard with a pass/fail checklist against every §15 criterion and the reason for each failure; strategy families; holdout unseal (explicit, logged, one-time, with confirmation). |
-| **AI Assistant** | Owner describes an idea in Hinglish → proposed strategy spec (owner reviews before running); plain-language explanation of any result. Uses the Claude API (latest model; key from `.env`, never committed). Never sees Tier C data; never bypasses guardrails. |
-| **Risk & Sizing** | Position size from account size and risk %, expected drawdown, risk of ruin, lot rounding to broker `volume_step`. |
-| **Paper Trading** | Live signals from the MT5 feed (read-only), simulated fills, drift monitor, observed vs modeled spread/slippage. |
-| **Data & Costs** | Datasets, quality reports, cost-model profiles (demo / Raw), rebuild buttons that launch jobs. |
-| **Research Journal** | Pre-registrations, notes, threshold-change log, decisions — all timestamped. |
+| Sidebar item | Phase | Tools on it |
+|---|---|---|
+| **Overview** | 1–3 ✓, grows | Chart-first workspace: candles M1–H1, click a candle → features, flags (rollover, abnormal spread, gaps); later overlays (swings, S/R, trendlines, detections, trades) and real summary tiles (latest runs, top candidates) — only from engine results. |
+| **Data Center** | 1–2 ✓, 9, 12 | Datasets, quality reports, cost-model profiles (demo / Raw), rebuild buttons that launch jobs, 20-year import + overlap check. |
+| **Behaviour Explorer** | 7 | *Market Behaviour Explorer*: distributions of any feature by year / session / volatility regime; candle-sequence, liquidity-sweep and S/R-reaction studies; "what happened next" event study (forward returns, MFE/MAE, hit rates, with costs). |
+| **Strategy Lab** | 5, 7, 8 | Three ways to create, one spec underneath: **AI Discovery** (hands a search to the Research Pipeline), **Visual Builder** (forms first: entry conditions, filters, exits, sizing; blocks later), **Chart-Based Creator** (mark a pattern on the chart → measurable rules draft → owner reviews; uses *Visual Pattern Intelligence*: swings, trendlines, channels, sweeps, formations). Live preview of entries on the chart; spec validation. |
+| **Backtest** | 5 | Equity in R and USD, drawdown, trade list with click-to-chart replay, three cost scenarios side by side, cost breakdown, results by year / month / session / weekday / regime, intrabar ambiguity rate, spread-source share. |
+| **Optimize** | 6 | Parameter search inside §9 (every variant counted as a trial); sensitivity heatmaps — plateau or spike? |
+| **Validate** | 6 | *Strategy Validation Lab*: in-sample (A) / out-of-sample (B) / walk-forward, Monte Carlo reshuffle + bootstrap CIs, cost-stress slider, regime stability, §15 checklist; holdout (C) unseal — explicit, logged, one-time. |
+| **Research Pipeline** | 8 | *Autonomous Research Pipeline*: define a search (blocks, ranges, objective, trial + time budget); hypotheses → pre-registration → tests → **accepted and rejected** records with reasons; live progress, pause/resume, overnight runs; trial counter and how it raises the bar. |
+| **My Strategies** | 5, 8 | Library: specs, versions, clone/compare, run history, candidates leaderboard with §15 pass/fail per criterion, strategy families, favourites. |
+| **AI Assistant** | 10 | Idea in Hinglish → proposed spec (owner reviews before running); plain-language explanation of any result; chart observations. Orchestrated by Claude Code / Desktop (Q-UI1). Never sees Tier C; never bypasses guardrails. |
+| *(later)* Risk & Sizing, Paper Trading, Research Journal | 10–11 | Position size / risk of ruin / lot rounding; live read-only signals with drift monitor; pre-registrations, notes, threshold-change log. |
 
 ## 7. Architecture additions
 
@@ -132,25 +138,31 @@ Existing: **Chart** (`/`), **Costs** (`/costs`). To build, in roadmap order:
   every evaluated variant counted as a trial on its family, Deflated Sharpe / SPA at the true
   count, output = candidates with full §15 checklists. Tier C is untouched until an explicit
   logged unseal.
+- **Layers (owner, 2026-09-21):** Interactive UI → AI Research Orchestrator (Claude Code /
+  Desktop, via tools) → existing Python engine (patterns, backtest, optimisation, validation)
+  → historical data storage. The UI never computes a research number itself; it renders
+  engine outputs with their ids. A research tool surface (run a spec, read results, propose a
+  spec draft) is added in Phase 8; the market-data MCP stays read-only.
 - **Account profiles in costs:** `profile ∈ {demo_trial7, raw}`; each profile has its own tick
   calibration, commission and swap from its own frozen symbol spec.
 
 ## 8. Roadmap (revised — replaces blueprint §16 order; exit conditions still apply)
 
-Status: Phases 0–2 **done** (foundation, data engine + Chart Viewer, cost model + Costs page).
+Status: Phases 0–3 **done** (foundation, data engine + Chart Viewer, cost model + Costs page,
+feature store + candle-click features panel — leakage gate passed 2026-09-21).
 
 | # | Phase | Deliverable | UI shipped | Exit condition |
 |---|---|---|---|---|
 | 3 | **Feature Store** | Candle anatomy, sequences, session (IANA tz), volatility, spread/rollover flags; every row with `available_at` | Candle click → features panel on Chart | **Leakage suite passes (hard gate)** |
 | 4 | **Strategy spec + Backtester** | Spec model, event-driven engine with M1 fills and 3 cost scenarios, trial counting, A/B/C split | — (API only) | Deterministic re-runs; hand-checked trades match; costs reconcile |
-| 5 | **Strategy Builder + Backtest Lab** | Form builder, run/compare, trade replay on chart | Builder, Backtest Lab | Owner builds and tests a strategy end to end from the UI |
-| 6 | **Jobs + Robustness Lab** | Job queue with progress; walk-forward, sensitivity, bootstrap, cost stress | Robustness Lab, job tray | Long runs survive page reloads; robustness reports reproducible |
-| 7 | **Structure & Patterns** | Swings, S/R, trendlines, channels, first behaviours (§17) as builder blocks, pre-registered | Overlays on Chart, Feature Explorer | Detections map to exact coordinates; regression tests pass |
-| 8 | **Research Engine** | Automated search with guardrails; candidates with §15 checklist | Research Lab, Candidates | Engine rediscovers a planted edge in synthetic data and rejects pure noise |
-| 9 | **Raw-account cost profile** | Ingest ticks from an Exness Raw Spread demo; commission confirmed (A4) | Costs page profile switch | Raw profile validated like Phase 2 |
+| 5 | **Strategy Builder + Backtest Lab** | Form builder, run/compare, trade replay on chart | Strategy Lab · Visual Builder, Backtest, My Strategies | Owner builds and tests a strategy end to end from the UI |
+| 6 | **Jobs + Robustness Lab** | Job queue with progress; walk-forward, sensitivity, bootstrap, cost stress | Optimize, Validate, job tray | Long runs survive page reloads; robustness reports reproducible |
+| 7 | **Structure & Patterns** | Swings, S/R, trendlines, channels, first behaviours (§17) as builder blocks, pre-registered | Overlays on Overview chart, Behaviour Explorer, Chart-Based Creator | Detections map to exact coordinates; regression tests pass |
+| 8 | **Research Engine** | Automated search with guardrails; candidates with §15 checklist | Research Pipeline, Strategy Lab · AI Discovery, candidates in My Strategies | Engine rediscovers a planted edge in synthetic data and rejects pure noise |
+| 9 | **Raw-account cost profile** | Ingest ticks from an Exness Raw Spread demo; commission confirmed (A4) | Data Center profile switch | Raw profile validated like Phase 2 |
 | 10 | **ML + AI Assistant** | LightGBM filters vs rule baseline; Claude-based idea → spec and result explanations | AI Assistant | ML beats baseline on unseen tiers or is reported as not helping |
 | 11 | **Paper Trading** | Live read-only feed, simulated execution, drift + slippage monitoring; refit slippage (A6) | Paper Trading | Forward telemetry operational |
-| 12 | **20-year data** | Dukascopy import, overlap check vs Exness, multi-source datasets | Data manager | Quality gate passes on the long history |
+| 12 | **20-year data** | Dukascopy import, overlap check vs Exness, multi-source datasets | Data Center | Quality gate passes on the long history |
 | 13 | **Research Gate** | Documented verdict per strategy vs §15 | Candidates report | Verdicts recorded; no real money in V1 |
 
 Phase 9 can move earlier the moment the owner opens a Raw Spread demo account — it only
@@ -181,20 +193,22 @@ needs ticks and the commission figure.
 | A7 | Open an **Exness Raw Spread demo** account so its ticks can calibrate the Raw cost profile (log in with the investor password; Algo Trading off). |
 | A1c | Investor-password login on the terminal (optional safety). |
 | A5 | Economic news calendar source for slippage windows (Phase 6+). |
+| A8 | Holiday / early-close calendar (≈ 17 of 274 weeks close early) — can share A5's source. |
+| Q-UI1 | In-page AI Assistant: (a) no API key — chat in Claude Code/Desktop, results shown in the UI (default), or (b) chat box in the dashboard with a Claude API key (paid per use). |
 
 ## 11. First task of the next session
 
-Start **Phase 3 — Feature Store**:
-- Build `src/candle_intel/features/` from the derived dataset + cost tables: candle anatomy
-  (body, wicks, range, close location, relative to ATR), sequences (last N candles, streaks,
-  inside/outside bars), context (session labels via IANA tz, time since session open,
-  volatility regime, M15/H1 context from *completed* higher-timeframe bars only), hygiene
-  flags (§5.3: rollover, abnormal spread, first/last bars of week, weekend gap).
-- Every feature row carries `available_at`; higher-timeframe features join as-of the last
-  *closed* bar.
-- Leakage suite in `tests/leakage/`: shifting future data must not change any past feature;
-  `available_at <= decision time` for every feature used; a deliberately leaky feature must be
-  caught.
-- Persist as a versioned, hashed feature dataset; API endpoint for one bar's features; Chart
-  page: click a candle → feature panel.
+Phase 3 is done (HANDOFF §6b). Start **Phase 4 — Strategy spec + Backtester**:
+- `src/candle_intel/strategy/`: versioned, hashed Pydantic spec — `entry` (conditions over
+  feature names from `features/registry.py`, e.g. `dirs_3 == "DDU" and close_loc > 0.7`),
+  `filters` (session, `vol_regime`, `hyg_no_entry` always on), `exit` (ATR stop/target, time
+  exit), `sizing` (fixed R), `meta` (family, hypothesis, pre-registration id).
+- `src/candle_intel/backtest/`: event-driven; decide at M5 close reading features **only via
+  `FeatureStore`**; fill at the next M5 open; resolve stops/targets on the M1 path
+  (pessimistic ambiguity policy, ambiguity rate reported); spread per bar from `M5_costs`
+  for all three scenarios + `costs/execution.py` slippage/commission/swap; deterministic.
+- Chronological A/B/C split (§9.1), trial counter per family in PostgreSQL, holdout sealed.
+- Tests: hand-checked trades, cost reconciliation, determinism, a synthetic planted-edge
+  run, and the shifted-target canary (§7.2).
+- API endpoints to run a spec and return trades/metrics (UI comes in Phase 5).
 - Explain it to the owner in simple Hinglish when done.

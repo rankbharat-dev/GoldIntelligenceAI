@@ -3,12 +3,14 @@
 import {
   CandlestickSeries,
   createChart,
+  createSeriesMarkers,
   HistogramSeries,
   TickMarkType,
   type CandlestickData,
   type HistogramData,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type LogicalRange,
   type MouseEventParams,
   type Time,
@@ -68,11 +70,21 @@ interface Legend {
   partial: boolean;
 }
 
-export function CandleChart({ timeframe, zone }: { timeframe: Timeframe; zone: DisplayZone }) {
+interface Props {
+  timeframe: Timeframe;
+  zone: DisplayZone;
+  /** Open time (UTC epoch s) of the selected bar on this timeframe, marked on the chart. */
+  selected?: number | null;
+  onSelect?: (time: number) => void;
+}
+
+export function CandleChart({ timeframe, zone, selected = null, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const onSelectRef = useRef(onSelect);
   const barsRef = useRef<Bars>({ candles: [], volume: [], hasMore: true });
   const loadingRef = useRef(false);
   const tfRef = useRef(timeframe);
@@ -114,19 +126,41 @@ export function CandleChart({ timeframe, zone }: { timeframe: Timeframe; zone: D
     });
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: "volume" } }, 1);
     chart.panes()[1]?.setStretchFactor(0.18);
+    const markers = createSeriesMarkers(candles, []);
+    const onClick = (p: MouseEventParams<Time>) => {
+      if (p.time !== undefined && p.seriesData.get(candles)) onSelectRef.current?.(p.time as number);
+    };
+    chart.subscribeClick(onClick);
 
     chartRef.current = chart;
     candleRef.current = candles;
     volumeRef.current = volume;
+    markersRef.current = markers;
     if (process.env.NODE_ENV === "development") {
       // Lets automated UI checks drive the time scale; synthetic mouse events don't reach the canvas.
       (window as unknown as { __ciChart?: IChartApi }).__ciChart = chart;
     }
     return () => {
+      chart.unsubscribeClick(onClick);
       chart.remove();
       chartRef.current = null;
+      markersRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  // ---------------------------------------------------------------- selected bar marker
+  useEffect(() => {
+    const has = selected != null && barsRef.current.candles.some((b) => b.time === selected);
+    markersRef.current?.setMarkers(
+      has
+        ? [{ time: selected as UTCTimestamp, position: "belowBar", shape: "arrowUp", color: "#f59e0b", text: "features" }]
+        : [],
+    );
+  }, [selected, loadedCount]);
 
   // ---------------------------------------------------------------- time zone
   useEffect(() => {
@@ -268,7 +302,7 @@ export function CandleChart({ timeframe, zone }: { timeframe: Timeframe; zone: D
       </div>
       <div className="text-[11px] text-muted-foreground">
         {status === "loading" && "Loading candles…"}
-        {status === "ready" && `${loadedCount.toLocaleString()} bars loaded · drag left for older history`}
+        {status === "ready" && `${loadedCount.toLocaleString()} bars loaded · drag left for older history · click a candle for its features`}
         {status === "error" && <span className="text-red-400">Could not load candles: {error}</span>}
       </div>
       </div>

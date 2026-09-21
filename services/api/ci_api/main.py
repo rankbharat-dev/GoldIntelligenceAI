@@ -9,7 +9,7 @@ or the MCP server; tests/leakage/test_mt5_boundary.py enforces that.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -236,6 +236,106 @@ def cost_levels(dataset: str) -> dict[str, Any]:
         "time": df["day"].cast(pl.Datetime("us")).dt.epoch("s").to_list(),
         "level_median": df["level_median"].to_list(),
         "measured_mean": [None if v is None else round(v, 2) for v in df["measured_mean"].to_list()],
+    }
+
+
+# ---------------------------------------------------------------- features (Phase 3)
+
+TF_MINUTES = {"M1": 1, "M5": 5, "M15": 15, "H1": 60}
+FEATURE_META = ("event_time", "available_at", "ts_server", "trading_day", "m15_close_utc", "h1_close_utc")
+
+
+def _feature_set_dir(ds: str) -> Path:
+    """Newest feature set of a dataset (ci-features build). Directory names come from disk."""
+    root = _root() / ds / "features"
+    sets = sorted(p for p in root.iterdir() if (p / "feature_set.json").exists()) if root.exists() else []
+    if not sets:
+        raise HTTPException(404, f"No feature set for {ds}. Run: ci-features build")
+    return sets[-1]
+
+
+def _json_value(v: Any) -> Any:
+    if isinstance(v, float) and v != v:  # NaN is not JSON
+        return None
+    if isinstance(v, datetime):
+        return int(v.replace(tzinfo=UTC).timestamp())
+    if hasattr(v, "isoformat"):
+        return v.isoformat()
+    return v
+
+
+@app.get("/api/features/{dataset}")
+def feature_set(dataset: str) -> dict[str, Any]:
+    """The newest feature set: schema (name, group, unit, timing, description), lineage,
+    leakage self-check and summary."""
+    doc = _read_json(_feature_set_dir(_resolve(dataset)) / "feature_set.json")
+    keep = (
+        "feature_set_id",
+        "feature_version",
+        "dataset_id",
+        "companion_cost_model_id",
+        "row_semantics",
+        "built_utc",
+        "code_version",
+        "config_hash",
+        "groups",
+        "schema",
+        "leakage_selfcheck",
+        "summary",
+        "files",
+    )
+    return {k: doc[k] for k in keep}
+
+
+@app.get("/api/features/{dataset}/bar")
+def feature_bar(
+    dataset: str,
+    time: Annotated[int, Query(description="UTC epoch seconds of the clicked bar's open")],
+    tf: Timeframe = "M5",
+) -> dict[str, Any]:
+    """Features of one M5 bar. A click on M1 maps to the M5 bar containing that minute;
+    on M15 / H1 to the last M5 bar inside it (the one that closes with it)."""
+    ds = _resolve(dataset)
+    fs = _feature_set_dir(ds)
+    t = datetime.fromtimestamp(time, tz=UTC).replace(tzinfo=None)
+    start = t.replace(minute=t.minute - t.minute % 5, second=0, microsecond=0)
+    end = t + timedelta(minutes=TF_MINUTES[tf])
+    df = (
+        pl.scan_parquet(fs / "features_M5.parquet")
+        .filter((pl.col("event_time") >= start) & (pl.col("event_time") < end))
+        .sort("event_time")
+        .tail(1)
+        .collect()
+    )
+    if df.is_empty():
+        raise HTTPException(404, f"No M5 bar inside the {tf} bar at {t.isoformat()} UTC")
+    row = {k: _json_value(v) for k, v in df.row(0, named=True).items()}
+    event_time = df["event_time"][0]
+
+    costs = None
+    try:
+        cm = _cost_model_dir(ds)
+        c = (
+            pl.scan_parquet(cm / "M5_costs.parquet")
+            .filter(pl.col("ts_utc") == event_time)
+            .select("spread_source", "spread_optimistic", "spread_base", "spread_pessimistic")
+            .collect()
+        )
+        if c.height:
+            costs = {"cost_model_id": cm.name} | {k: _json_value(v) for k, v in c.row(0, named=True).items()}
+    except HTTPException:
+        pass
+
+    return {
+        "dataset_id": ds,
+        "feature_set_id": fs.name,
+        "tf": tf,
+        "requested_time": time,
+        "mapped": tf != "M5" or row["event_time"] != time,
+        "meta": {k: row[k] for k in FEATURE_META},
+        "values": {k: v for k, v in row.items() if k not in FEATURE_META and k != "in_research_window"},
+        "in_research_window": row["in_research_window"],
+        "costs": costs,
     }
 
 
