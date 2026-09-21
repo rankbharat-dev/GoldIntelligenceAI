@@ -47,9 +47,7 @@ _ALLOWED_FUNCTIONS = (
 # Read-only proxy. Code outside this module gets `api`, never the raw module.
 api = SimpleNamespace(**{name: getattr(_mt5, name) for name in _ALLOWED_FUNCTIONS})
 
-TIMEFRAMES = MappingProxyType(
-    {tf: getattr(_mt5, f"TIMEFRAME_{tf}") for tf in RESEARCH_TIMEFRAMES}
-)
+TIMEFRAMES = MappingProxyType({tf: getattr(_mt5, f"TIMEFRAME_{tf}") for tf in RESEARCH_TIMEFRAMES})
 COPY_TICKS_ALL = _mt5.COPY_TICKS_ALL
 
 _ACCOUNT_MODES = {0: "demo", 1: "contest", 2: "real"}
@@ -64,7 +62,8 @@ class SessionInfo:
     """Connection facts that are safe to log and report. No account identifiers."""
 
     terminal_build: int
-    terminal_company: str
+    broker_company: str  # the broker (from the account), not the terminal vendor
+    broker_server: str
     terminal_connected: bool
     terminal_algo_trading_enabled: bool
     account_mode: str  # demo / contest / real
@@ -78,12 +77,29 @@ def _last_error() -> str:
     return f"[{code}] {msg}"
 
 
-def _account_facts() -> tuple[str, bool]:
-    """Only the two fields needed for safety checks ever leave this function."""
+@dataclass(frozen=True)
+class _AccountFacts:
+    mode: str
+    trading_permitted: bool
+    broker_company: str
+    broker_server: str
+
+
+def _account_facts() -> _AccountFacts:
+    """Only these four fields ever leave this function — no login, name, balance or equity.
+
+    Broker identity must come from the account: ``terminal_info().company`` is the
+    terminal software vendor (usually "MetaQuotes Ltd."), not the broker.
+    """
     info = _mt5.account_info()
     if info is None:
         raise MT5Error(f"No account session in terminal: {_last_error()}")
-    return _ACCOUNT_MODES.get(info.trade_mode, "unknown"), bool(info.trade_allowed)
+    return _AccountFacts(
+        mode=_ACCOUNT_MODES.get(info.trade_mode, "unknown"),
+        trading_permitted=bool(info.trade_allowed),
+        broker_company=str(info.company),
+        broker_server=str(info.server),
+    )
 
 
 def estimate_server_offset_hours(broker_symbol: str) -> float | None:
@@ -127,7 +143,7 @@ def connect(settings: Settings | None = None) -> SessionInfo:
         )
 
     term = api.terminal_info()
-    mode, trading_permitted = _account_facts()
+    acct = _account_facts()
     # A freshly launched terminal serves a cached tick until the feed catches up.
     offset = None
     for _ in range(5):
@@ -137,11 +153,12 @@ def connect(settings: Settings | None = None) -> SessionInfo:
         time.sleep(1)
     info = SessionInfo(
         terminal_build=int(api.version()[1]),
-        terminal_company=str(term.company),
+        broker_company=acct.broker_company,
+        broker_server=acct.broker_server,
         terminal_connected=bool(term.connected),
         terminal_algo_trading_enabled=bool(term.trade_allowed),
-        account_mode=mode,
-        account_trading_permitted=trading_permitted,
+        account_mode=acct.mode,
+        account_trading_permitted=acct.trading_permitted,
         broker_symbol=s.mt5_broker_symbol,
         server_offset_hours=offset,
     )
@@ -189,9 +206,7 @@ def _require_timeframe(timeframe: str) -> int:
     try:
         return TIMEFRAMES[timeframe]
     except KeyError:
-        raise ValueError(
-            f"timeframe must be one of {RESEARCH_TIMEFRAMES}, got {timeframe!r}"
-        ) from None
+        raise ValueError(f"timeframe must be one of {RESEARCH_TIMEFRAMES}, got {timeframe!r}") from None
 
 
 TIMEFRAME_MINUTES = MappingProxyType({"M1": 1, "M5": 5, "M15": 15, "H1": 60})
@@ -311,9 +326,7 @@ def fetch_rates_latest(timeframe: str, count: int, settings: Settings | None = N
     return rates_to_frame(raw)
 
 
-def fetch_ticks_range(
-    start: datetime, end: datetime, settings: Settings | None = None
-) -> pl.DataFrame:
+def fetch_ticks_range(start: datetime, end: datetime, settings: Settings | None = None) -> pl.DataFrame:
     s = settings or get_settings()
     raw = api.copy_ticks_range(
         s.mt5_broker_symbol, to_epoch_seconds(start), to_epoch_seconds(end), COPY_TICKS_ALL
@@ -324,11 +337,28 @@ def fetch_ticks_range(
 
 
 _SPEC_FIELDS = (
-    "name", "description", "currency_base", "currency_profit", "digits", "point",
-    "trade_tick_size", "trade_tick_value", "trade_contract_size", "volume_min",
-    "volume_max", "volume_step", "trade_stops_level", "trade_freeze_level",
-    "swap_mode", "swap_long", "swap_short", "swap_rollover3days", "spread",
-    "spread_float", "trade_calc_mode", "trade_mode",
+    "name",
+    "description",
+    "currency_base",
+    "currency_profit",
+    "digits",
+    "point",
+    "trade_tick_size",
+    "trade_tick_value",
+    "trade_contract_size",
+    "volume_min",
+    "volume_max",
+    "volume_step",
+    "trade_stops_level",
+    "trade_freeze_level",
+    "swap_mode",
+    "swap_long",
+    "swap_short",
+    "swap_rollover3days",
+    "spread",
+    "spread_float",
+    "trade_calc_mode",
+    "trade_mode",
 )
 
 

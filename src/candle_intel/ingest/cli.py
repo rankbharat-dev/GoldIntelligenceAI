@@ -3,6 +3,7 @@
     ci-ingest status                 connection + safety posture + symbol spec
     ci-ingest probe                  history depth per timeframe and tick window depth
     ci-ingest snapshot --tf M5 --days 30
+    ci-ingest raw [--since 2021-01-01] [--ticks [--tick-days N]]
 
 Snapshots are raw, read-only Parquet with a JSON sidecar. They are not yet a
 validated dataset version — that is the Phase 1 quality gate's job.
@@ -143,7 +144,8 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     meta = {
         "symbol": CANONICAL_SYMBOL,
         "broker_symbol": info.broker_symbol,
-        "broker": info.terminal_company,
+        "broker": info.broker_company,
+        "broker_server": info.broker_server,
         "terminal_build": info.terminal_build,
         "account_mode": info.account_mode,
         "timeframe": args.tf,
@@ -165,6 +167,29 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_raw(args: argparse.Namespace) -> int:
+    from candle_intel.ingest import bulk
+
+    since = datetime.fromisoformat(args.since) if args.since else None
+    root = bulk.ingest(since=since, with_ticks=args.ticks, tick_days=args.tick_days)
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    summary = {
+        "raw_version": manifest["raw_version"],
+        "broker": manifest["session"]["broker_company"],
+        "server": manifest["session"]["broker_server"],
+        "m1_window_ts_server": manifest["m1_window_ts_server"],
+        "m1_months": len(manifest["m1_chunks"]),
+        "m1_bars": sum(c["rows"] for c in manifest["m1_chunks"]),
+        "m1_empty_months": manifest["m1_empty_months"],
+        "reference_bars": {k: v["rows"] for k, v in manifest["reference"].items()},
+        "tick_days": len(manifest["tick_chunks"]),
+        "ticks": sum(c["rows"] for c in manifest["tick_chunks"]),
+        "path": str(root),
+    }
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s %(message)s")
@@ -176,6 +201,11 @@ def main(argv: list[str] | None = None) -> int:
     snap.add_argument("--tf", choices=list(RESEARCH_TIMEFRAMES), default="M5")
     snap.add_argument("--days", type=int, default=30)
     snap.set_defaults(fn=cmd_snapshot)
+    raw = sub.add_parser("raw", help="new versioned raw dataset: all M1 + reference TFs (+ ticks)")
+    raw.add_argument("--since", help="server-clock date; default = earliest M1 the terminal serves")
+    raw.add_argument("--ticks", action="store_true", help="also pull bid/ask ticks")
+    raw.add_argument("--tick-days", type=int, help="limit ticks to the last N days")
+    raw.set_defaults(fn=cmd_raw)
     args = p.parse_args(argv)
     try:
         return args.fn(args)

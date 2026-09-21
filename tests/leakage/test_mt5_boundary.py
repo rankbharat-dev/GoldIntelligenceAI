@@ -17,9 +17,17 @@ SOURCE_DIRS = [ROOT / "src", ROOT / "services", ROOT / "scripts"]
 MT5_GATEWAY = ROOT / "src" / "candle_intel" / "ingest" / "mt5_session.py"
 
 FORBIDDEN_MT5_ATTRS = {
-    "order_send", "order_check", "order_calc_margin", "order_calc_profit",
-    "orders_get", "orders_total", "positions_get", "positions_total",
-    "history_orders_get", "history_orders_total", "history_deals_get",
+    "order_send",
+    "order_check",
+    "order_calc_margin",
+    "order_calc_profit",
+    "orders_get",
+    "orders_total",
+    "positions_get",
+    "positions_total",
+    "history_orders_get",
+    "history_orders_total",
+    "history_deals_get",
     "history_deals_total",
 }
 # mt5.login() switches accounts. "login" is also a legitimate initialize() keyword,
@@ -28,8 +36,17 @@ FORBIDDEN_ATTR_ONLY = {"login"}
 
 # Packages under candle_intel that are research code and must stay offline.
 RESEARCH_PACKAGES = {
-    "data", "costs", "features", "structure", "patterns", "labeling",
-    "statistics", "backtest", "ml", "viewer", "vision",
+    "data",
+    "costs",
+    "features",
+    "structure",
+    "patterns",
+    "labeling",
+    "statistics",
+    "backtest",
+    "ml",
+    "viewer",
+    "vision",
 }
 
 
@@ -93,3 +110,14 @@ def test_research_code_cannot_reach_live_data() -> None:
                 if mod.startswith(("candle_intel.ingest", "ci_mt5_mcp", "MetaTrader5")):
                     offenders.append(f"{p.relative_to(ROOT)} -> {mod}")
     assert not offenders, f"Research code imports a live-data layer: {offenders}"
+
+
+def test_api_cannot_reach_live_data() -> None:
+    """The web API serves validated Parquet only."""
+    offenders = [
+        f"{p.relative_to(ROOT)} -> {mod}"
+        for p in (ROOT / "services" / "api").rglob("*.py")
+        for mod in _imports(ast.parse(p.read_text("utf-8")))
+        if mod.startswith(("candle_intel.ingest", "ci_mt5_mcp", "MetaTrader5"))
+    ]
+    assert not offenders, f"API imports a live-data layer: {offenders}"

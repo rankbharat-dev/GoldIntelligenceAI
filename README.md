@@ -7,6 +7,7 @@ execution. Independent of Shiibaa.
 
 | Document | What it is |
 |---|---|
+| [docs/HANDOFF.md](docs/HANDOFF.md) | **Start here** — current state, rules, next phase |
 | [docs/ARCHITECTURE_v1.2.md](docs/ARCHITECTURE_v1.2.md) | Current blueprint (supersedes v1.1, v1.0 .docx) |
 | [docs/TECH_SELECTION.md](docs/TECH_SELECTION.md) | Library choices, backtesting decision, custom components |
 | [docs/reviews/mt5-mcp-security-review.md](docs/reviews/mt5-mcp-security-review.md) | Why external MT5 MCP servers were rejected |
@@ -14,8 +15,16 @@ execution. Independent of Shiibaa.
 
 ## Status
 
-**Phase 0 (foundation) — in progress.** MT5 gateway, ingestion CLI, read-only MCP server,
-metadata schema, boundary tests. Phase 1 (data engine) is next.
+**Phase 1 (data engine) — built and running on Exness-MT5Trial7 (demo).**
+
+| Piece | State |
+|---|---|
+| Raw ingestion (`ci-ingest raw`) | M1 2021-07 → now (1.84 M bars), broker M5/M15/H1 reference, 223 days of ticks (70.8 M) |
+| Data build (`ci-data build`) | Clock inferred (UTC+0), quality gate passed, M5/M15/H1 match broker bars 100 % |
+| Research API (`ci-api`) | Candles with scroll-back paging, dataset summary |
+| Web Chart Viewer (`apps/web`) | Candles, timeframe + time-zone switch, data-health panel |
+
+Next: Phase 2 — spread / slippage / swap cost model from the tick archive.
 
 ## Setup (Windows)
 
@@ -41,11 +50,14 @@ docker compose up -d                   # PostgreSQL 17 on 127.0.0.1:5434
 ## Everyday commands
 
 ```powershell
-.venv\Scripts\ci-ingest status                    # connection, safety posture, symbol spec
-.venv\Scripts\ci-ingest probe                     # history depth per timeframe, tick window
-.venv\Scripts\ci-ingest snapshot --tf M5 --days 30
-.venv\Scripts\python -m pytest                    # unit + leakage (no MT5 needed)
-.venv\Scripts\python -m pytest -m mt5             # live MT5 integration
+.venv\Scripts\ci-ingest status                     # connection, safety posture, symbol spec
+.venv\Scripts\ci-ingest raw --ticks --tick-days 260 # new raw dataset: all M1 + reference TFs + ticks
+.venv\Scripts\ci-data build                        # newest raw -> validated UTC dataset (M1/M5/M15/H1)
+.venv\Scripts\ci-data list
+.venv\Scripts\ci-api                               # research API on http://127.0.0.1:8000
+npm --prefix apps/web run dev                       # Chart Viewer on http://localhost:3000
+.venv\Scripts\python -m pytest                     # unit + leakage (no MT5 needed)
+.venv\Scripts\python -m pytest -m mt5              # live MT5 integration
 ```
 
 ## AI assistant access (MCP)

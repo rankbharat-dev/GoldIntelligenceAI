@@ -17,7 +17,9 @@
 | Requests **chunked below the terminal bar limit** | Over-limit ranges fail with "Invalid params" | §3.4 |
 | Terminal **"Max bars in chart" is the binding history cap**, not the broker | Live probe: M1/M5/M15 capped at 99,999 bars, H1 reaches 2016 uncapped | §3.5 |
 | Real bid/ask tick window measured at **~234 days** on the test server | Sizes the spread-calibration set (§6) | §3.5 |
-| Test server (MetaQuotes-Demo) is **not a broker feed** — research must use the real broker | Results are broker-conditional (§3.2) | §3.5, App. A |
+| Broker identified from the **account** (Exness-MT5Trial7), not the terminal vendor | `terminal_info().company` is always "MetaQuotes Ltd." | §3.5 |
+| Bulk M1 via **month-sized range requests** — full archive from 2021-07 | `from_pos` is capped by the chart-bar limit; ranges are not | §3.5 |
+| Web UI **starts in Phase 1** as a Next.js Chart Viewer and grows one page per phase | Owner request 2026-09-21; replaces the Plotly-only viewer | §16 |
 
 ### v1.1
 
@@ -163,22 +165,29 @@ plus broker, server and terminal build. Never read these live inside a backtest.
 7. Run the quality gate (§5) before anything downstream is derived. Incremental top-ups
    create new dataset versions; existing versions are never mutated.
 
-### 3.5 Coverage probe results (2026-09-21, MetaQuotes-Demo, build 6182)
+### 3.5 Live findings (2026-09-21, Exness-MT5Trial7 demo, terminal build 6182)
 
-| Timeframe | Bars returned | Earliest (server clock) | Limited by |
-|---|---|---|---|
-| M1 | 99,999 | 2026-06-10 | **Terminal limit** |
-| M5 | 99,999 | 2025-04-23 | **Terminal limit** |
-| M15 | 99,999 | 2022-06-28 | **Terminal limit** |
-| H1 | 35,665 | 2016-08-09 | Server depth |
-| Ticks (bid/ask) | — | ~234 days back | Server archive |
+**Broker identity comes from the account, not the terminal.** `terminal_info().company`
+is the terminal vendor ("MetaQuotes Ltd."), which initially mislabelled this server as
+MetaQuotes-Demo. The gateway now reports `account_info().company` / `.server` only
+(never login, name or balance). The data below is **Exness Technologies Ltd**.
 
-- Server offset measured at **UTC+0** on this server; other brokers are commonly UTC+2/+3.
-- The terminal's **"Max bars in chart" = 100,000** is the binding constraint for M1–M15.
-  It must be set to Unlimited before Phase 1 ingestion.
-- **MetaQuotes-Demo is MetaQuotes' own demo feed, not a broker.** It is suitable for
-  building and testing infrastructure; research datasets must come from the chosen
-  broker's server (Appendix A2), then be re-probed.
+| Access path | Result |
+|---|---|
+| `copy_rates_from_pos` (latest N bars) | Capped at ~100,000 bars per timeframe by the terminal's chart limit |
+| `copy_rates_range`, **month by month** | Full local archive: **M1 from 2021-07-01**, 1.84 M bars, no empty months |
+| Broker-native M5 / M15 / H1 over that window | 369,659 / 123,361 / 30,940 bars |
+| `copy_ticks_range`, day by day | **223 trading days, 70.8 M bid/ask ticks** (≈ 500 MB zstd Parquet) |
+
+- Bulk ingestion therefore uses month-sized range requests, never `from_pos`.
+- Broker clock measured as **UTC+0** year-round (break at 16:58 New York moves between
+  20:58 and 21:58 UTC with US DST; 99.4 % of 1,042 measured days agree, the rest are
+  holiday or data-hole days).
+- M5 / M15 / H1 rebuilt from M1 match the broker's own bars **100 %** (OHLC, exact).
+- First week (2021-06-28) is thin and excluded from the research window, which is
+  **2021-07-05 → present, 5.2 years**.
+- Exness-MT5Trial7 is a real broker's demo server, so its data is research-grade for this
+  broker. Results remain broker-conditional (§3.2).
 
 ---
 
@@ -582,14 +591,14 @@ Failing any criterion returns the strategy to research. There is no partial prom
 | **1 — MT5 Data Engine** | Direct-API chunked ingestion, spec freeze, quality gate, rollover detection, M1→M5/M15/H1 | Verified dataset version + coverage and quality report |
 | **2 — Cost Model** | Spread calibration from ticks, slippage, swap, three scenarios | Cost model validated against tick window |
 | **3 — Feature Store** | Candle/sequence/context features with `available_at` | **Leakage suite passes** — blocking gate |
-| **4 — Research Viewer** | Thin local chart inspection of candles, features, detections | Any bar and any detection visually verifiable |
+| **4 — Research Viewer** | ~~Plotly viewer~~ → Next.js Chart Viewer, delivered with Phase 1; gains feature and detection overlays | Any bar and any detection visually verifiable |
 | **5 — Visual Structure** | Swings, S/R, trendlines, channels | Detections map to exact coordinates; regression tests pass |
 | **6 — Behaviour Research** | First 5 behaviours, pre-registered, triple-barrier labelled | Occurrence and statistics reports with sample-size verdicts |
 | **7 — Backtester** | Event-driven, M1 resolution, ambiguity reporting, walk-forward | Deterministic, reproducible, ambiguity rate reported |
 | **8 — ML Research** | Baselines → LightGBM → registry, trials-aware statistics | Validation-tier comparison against rule-based baseline |
 | **9 — Paper Trading** | Live MT5 feed, simulated execution, drift monitoring | Forward-test telemetry operational |
 | **10 — Research Gate** | Candidate / reject decisions against §15 | Documented verdict per strategy; no real money in V1 |
-| **11 — Full Web UI** | Next.js research application | Built only once there is validated content to explore |
+| **11 — Full Web UI** | Remaining pages (Backtest Lab, AI Model Lab, Paper Trading) and polish | Pages are added as each phase produces content |
 
 Phase 3 is a hard gate. No behaviour research begins until the leakage suite passes.
 
@@ -678,6 +687,6 @@ an edge at all.
 | A1 | ~~MT5 MCP repo to pin~~ — resolved: purpose-built server (v1.2) | — |
 | A1b | Set terminal **Max bars in chart = Unlimited**, restart, re-run `ci-ingest probe` | Phase 1 |
 | A1c | Log in with the **investor password** and switch **Algo Trading off** | Before any live session |
-| A2 | **Real broker** name and server. Current test server is MetaQuotes-Demo, not a broker feed | Phase 1 |
+| A2 | ~~Broker~~ — resolved: Exness Technologies Ltd, Exness-MT5Trial7 (demo) | — |
 | A3 | ~~Coverage probe~~ — tool built (`ci-ingest probe`); re-run on the real broker after A1b | Phase 1 |
 | A4 | Confirm commission per lot and current swap values for the account type | Phase 2 |

@@ -66,8 +66,7 @@ class Settings(BaseSettings):
     def _gold_only(cls, v: str) -> str:
         if not _BROKER_GOLD_SYMBOL.match(v):
             raise ValueError(
-                f"mt5_broker_symbol={v!r} is not a spot-gold symbol. "
-                "This project is XAUUSD-only."
+                f"mt5_broker_symbol={v!r} is not a spot-gold symbol. This project is XAUUSD-only."
             )
         return v
 

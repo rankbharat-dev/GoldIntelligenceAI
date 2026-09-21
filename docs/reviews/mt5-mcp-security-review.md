@@ -56,7 +56,7 @@ No exploit was executed against the terminal; findings are from source review.
 | No code execution | Six fixed, typed tools. No eval/exec path | `tests/unit/test_mcp_surface.py::test_tool_set_is_exactly_the_allowlist` |
 | XAUUSD only | No tool has a symbol parameter. The broker symbol comes from config and must match a spot-gold pattern | `test_no_tool_accepts_a_symbol`, `tests/unit/test_settings.py` |
 | Research timeframes only | `timeframe` is an enum of M1/M5/M15/H1 | `test_rates_timeframes_are_research_timeframes_only` |
-| No account identifiers | `account_info` is read inside the gateway only, and only `trade_mode` + `trade_allowed` leave it | `test_account_info_confined_to_gateway` |
+| No account identifiers | `account_info` is read inside the gateway only; only `trade_mode`, `trade_allowed`, broker `company` and `server` leave it — never login, name, balance or equity | `test_account_info_confined_to_gateway` |
 | Credentials never exposed | Optional `SecretStr` settings from `.env` (git-ignored); `Settings.redacted()` for reports; nothing credential-bearing in any tool response | `test_redacted_never_contains_password` |
 | Bounded output | Bars capped (default 5,000), ticks capped (20,000), tick windows ≤ 6 h, rate windows rejected above 2× cap | Code review |
 | Annotations honest | All tools `readOnlyHint=True, destructiveHint=False` — true by construction | `test_every_tool_is_annotated_read_only` |
@@ -72,9 +72,9 @@ No exploit was executed against the terminal; findings are from source review.
    send orders while it is off. Reported as `terminal_algo_trading_enabled`.
 3. Use a **demo** account for all research sessions. Reported as `account_mode`.
 
-At the time of testing (2026-09-21): demo ✔, investor login ✘, Algo Trading ON ✘.
+Status on 2026-09-21 (second check): demo ✔, Algo Trading OFF ✔, investor login ✘ (optional).
 
-## 5. Live verification (2026-09-21, MetaQuotes-Demo, terminal build 6182)
+## 5. Live verification (2026-09-21, Exness-MT5Trial7 demo, terminal build 6182)
 
 - Direct API: connected, XAUUSD spec captured, 30-day M5 snapshot written (5,575 closed bars).
 - MCP over real stdio: `xauusd_status` + `xauusd_rates(M5, 500)` —

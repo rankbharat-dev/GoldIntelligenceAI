@@ -52,6 +52,8 @@ dev = [
 [project.scripts]
 ci-mt5-mcp = "ci_mt5_mcp.server:main"
 ci-ingest = "candle_intel.ingest.cli:main"
+ci-data = "candle_intel.data.build:main"
+ci-api = "ci_api.main:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -78,3 +80,5 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 # Tests deliberately use naive datetimes (MT5 wall-clock semantics) and dummy secrets.
 "tests/**" = ["S106", "DTZ001"]
+# MT5 range bounds are naive broker-server wall times by design (see mt5_session.to_epoch_seconds).
+"src/candle_intel/ingest/**" = ["DTZ001"]

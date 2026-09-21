@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "C:\\Gold_Intelligence_AI\\.venv\\Scripts\\ci-api.exe",
+      "runtimeArgs": [],
+      "port": 8000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:\\Gold_Intelligence_AI\\apps\\web", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
