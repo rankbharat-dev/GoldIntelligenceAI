@@ -55,6 +55,7 @@ dev = [
 
 [project.scripts]
 ci-mt5-mcp = "ci_mt5_mcp.server:main"
+ci-ceo-bridge = "ci_api.ceo_bridge:main"
 ci-ingest = "candle_intel.ingest.cli:main"
 ci-data = "candle_intel.data.build:main"
 ci-costs = "candle_intel.costs.build:main"

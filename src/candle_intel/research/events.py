@@ -206,6 +206,23 @@ def study(
     feats = mk.features(columns_needed(spec))
     lo, hi = mk.split.bounds(tier)  # type: ignore[arg-type]
     sigs = signals(spec, feats).filter((pl.col("decision_time") >= lo) & (pl.col("decision_time") < hi))
+    return summarise_signals(spec, defn, sigs, feats, mk, tier, registered, progress)
+
+
+def summarise_signals(
+    spec: StrategySpec,
+    defn: dict[str, Any],
+    sigs: pl.DataFrame,
+    feats: pl.DataFrame,
+    mk: Market,
+    tier: str,
+    registered: bool = False,
+    progress=None,
+) -> dict[str, Any]:
+    """The study statistics for a given set of occurrences (``decision_time``,
+    ``event_time``, ``side``, ``atr_pts``) already restricted to ``tier``. Used by
+    :func:`study` and by the code-defined pattern detectors (candle_intel.patterns)."""
+    lo, hi = mk.split.bounds(tier)  # type: ignore[arg-type]
     if progress:
         progress(0.1, f"{sigs.height} occurrences — labelling")
     t = label(spec, mk, sigs, tier).join(_context(mk), on="decision_time", how="left")

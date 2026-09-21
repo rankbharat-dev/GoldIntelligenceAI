@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Query
 from candle_intel.config import get_settings
 from candle_intel.costs import profiles
 
-from . import assistant, explore, pipeline, research
+from . import assistant, ceo, explore, patterns, pipeline, research
 
 Timeframe = Literal["M1", "M5", "M15", "H1"]
 MAX_BARS = 5000
@@ -30,6 +30,8 @@ app.include_router(research.router)
 app.include_router(explore.router)
 app.include_router(pipeline.router)
 app.include_router(assistant.router)
+app.include_router(ceo.router)
+app.include_router(patterns.router)
 
 
 def _root() -> Path:

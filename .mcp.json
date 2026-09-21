@@ -18,6 +18,17 @@
       "env": {
         "CI_API_URL": "http://127.0.0.1:8000"
       }
+    },
+    "candle-intelligence-ceo": {
+      "type": "stdio",
+      "command": ".venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "ci_api.ceo_mcp"
+      ],
+      "env": {
+        "CI_API_URL": "http://127.0.0.1:8000"
+      }
     }
   }
 }

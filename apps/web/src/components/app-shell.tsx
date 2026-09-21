@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bot,
   BrainCircuit,
+  Briefcase,
   CandlestickChart,
   Database,
   FlaskConical,
@@ -38,6 +39,7 @@ interface NavItem {
 // (requirements/2026-09-21_ui-redesign-research-workspace.md). Unbuilt pages stay visible
 // but disabled, labelled with the phase that delivers them.
 const NAV: NavItem[] = [
+  { label: "CEO Work Lab", hint: "Mission do · AI agents research karein", icon: Briefcase, href: "/ceo-lab" },
   { label: "Overview", hint: "Chart workspace", icon: LayoutDashboard, href: "/" },
   { label: "Data Center", hint: "Data health · costs", icon: Database, href: "/costs" },
   { label: "Behaviour Explorer", hint: "Sequences · regimes · S/R", icon: ScanSearch, href: "/explorer" },

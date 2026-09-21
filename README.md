@@ -23,10 +23,16 @@ execution. Independent of Shiibaa.
 | Raw ingestion (`ci-ingest raw`) | M1 2021-07 → now (1.84 M bars), broker M5/M15/H1 reference, 223 days of ticks (70.8 M) |
 | Data build (`ci-data build`) | Clock inferred (UTC+0), quality gate passed, M5/M15/H1 match broker bars 100 % |
 | Cost model (`ci-costs build`) | Spread per M1/M5 bar (measured / modeled), 3 scenarios, slippage, commission, swap; validated out-of-sample |
-| Feature store (`ci-features build`) | 90 features per M5 bar (anatomy, sequence, volatility, DST-aware sessions, daily, M15/H1 context, spread, §5.3 hygiene), each row with `available_at`; build blocked unless the leakage self-check passes |
+| Feature store (`ci-features build`) | features/3: M5 features per bar incl. market structure and previous-day sweeps (anatomy, sequence, volatility, DST-aware sessions, daily, M15/H1 context, spread, §5.3 hygiene), each row with `available_at`; build blocked unless the leakage self-check passes |
 | Research API (`ci-api`) | Candles with scroll-back paging, dataset summary, cost model / heatmap / spread levels, feature set + one bar's features |
 | Backtester | Strategy spec (`strategy-spec/1`), event-driven engine (M5 decisions, M1 fills, 3 cost scenarios), frozen A/B/C split with a sealed holdout, trial counting per family, Deflated Sharpe, bootstrap, Monte Carlo, cost stress, walk-forward, §15 checklist |
 | Web app (`apps/web`) | Dark-gold research workspace: Overview (chart + features panel), Data Center (costs), Strategy Lab (visual builder), Backtest, Optimize, Validate, My Strategies, job tray |
+
+**CEO Work Lab** (`/ceo-lab`, [docs/requirements/2026-09-21_ceo-work-lab.md](docs/requirements/2026-09-21_ceo-work-lab.md)):
+the owner writes a research mission; a Research Director and four specialist agents
+(Claude Code subagents, `.claude/agents/`) plan, study, write strategies and validate them
+through the engine; the report, with every number linked to its run, lands on the page.
+Run it with `/ceo-run` in Claude Code, or `Start_CEO_Bridge.bat` + the page's button.
 
 Next: Phase 11 — paper trading (see [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) §8, §11). Owner items: Raw Spread demo ticks (A7), AgentRouter budget (A9).
 
@@ -85,6 +91,11 @@ npm --prefix apps/web run dev                       # web app on http://localhos
 | `xauusd_spread_stats` | Spread p25/p50/p90/p99/max over the last N minutes |
 
 No tool accepts a symbol, executes code, trades, or returns account identifiers.
+
+Two more servers drive research: `candle-intelligence-research` (propose / backtest / study,
+tier C withheld) and `candle-intelligence-ceo` (CEO Work Lab missions: plans, task hand-ins,
+reports, Director Room). Both are thin clients of `ci-api`; their tool lists are pinned by
+tests.
 All times are on the **broker server clock**.
 
 ## Ground rules

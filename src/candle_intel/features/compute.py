@@ -31,7 +31,7 @@ from candle_intel.data.aggregate import aggregate
 from candle_intel.features.registry import META_COLUMNS, feature_names
 from candle_intel.structure import geometry as structure
 
-FEATURE_VERSION = "features/2"  # /2 (Phase 7): market-structure group
+FEATURE_VERSION = "features/3"  # /2 (Phase 7): market structure · /3: previous-day sweeps
 
 BAR = timedelta(minutes=5)
 ATR_BARS = volatility.ATR_BARS
@@ -362,6 +362,35 @@ def compute_features(bars: Bars, point: float, research_start: datetime | None =
         dist_prev_high_atr=(c - pl.col("_pd_high")) / atr,
         dist_prev_low_atr=(c - pl.col("_pd_low")) / atr,
         dist_prev_close_atr=(c - pl.col("_pd_close")) / atr,
+    )
+    # Previous-day sweeps: the wick takes out yesterday's high / low, the close comes back.
+    # Same rule as candle_intel.patterns.prev_day; per-day counters use this and earlier bars.
+    pdh, pdl = pl.col("_pd_high"), pl.col("_pd_low")
+    pdh_sw = ((h > pdh) & (c < pdh)).fill_null(False)
+    pdl_sw = ((low < pdl) & (c > pdl)).fill_null(False)
+    df = df.with_columns(
+        pdh_sweep=pdh_sw,
+        pdl_sweep=pdl_sw,
+        pdh_sweep_depth_atr=pl.when(pdh_sw).then((h - pdh) / atr),
+        pdl_sweep_depth_atr=pl.when(pdl_sw).then((pdl - low) / atr),
+        pdh_sweeps_today=pdh_sw.cast(pl.Int32).cum_sum().over("trading_day", order_by="event_time"),
+        pdl_sweeps_today=pdl_sw.cast(pl.Int32).cum_sum().over("trading_day", order_by="event_time"),
+        pdh_accepted_before=(c > pdh)
+        .fill_null(False)
+        .cast(pl.Int32)
+        .cum_max()
+        .shift(1)
+        .over("trading_day", order_by="event_time")
+        .fill_null(0)
+        > 0,
+        pdl_accepted_before=(c < pdl)
+        .fill_null(False)
+        .cast(pl.Int32)
+        .cum_max()
+        .shift(1)
+        .over("trading_day", order_by="event_time")
+        .fill_null(0)
+        > 0,
     )
 
     # ------------------------------------------------------------ higher timeframes (as-of close)
