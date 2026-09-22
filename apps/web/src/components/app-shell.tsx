@@ -15,6 +15,7 @@ import {
   Library,
   Lightbulb,
   Menu,
+  PlayCircle,
   ScanSearch,
   ShieldCheck,
   SlidersHorizontal,
@@ -40,31 +41,78 @@ interface NavItem {
   match?: string[]; // extra paths that highlight this item
 }
 
-// Simple mode (requirement 2026-09-22_simple-mode-ui.md): five goal-first items in plain Hinglish.
-const SIMPLE_NAV: NavItem[] = [
-  { label: "Home", hint: "Aaj kya karna hai?", icon: House, href: "/" },
-  { label: "Idea test karo", hint: "5 sawaal → seedha jawab", icon: Lightbulb, href: "/idea" },
-  { label: "AI Research", hint: "Sawaal do, AI team test kare", icon: Bot, href: "/ceo-lab" },
-  { label: "Market samjho", hint: "Pattern ke baad gold kya karta", icon: ChartLine, href: "/learn" },
-  { label: "Meri strategies", hint: "Kahan tak pahunchi, agla step", icon: Library, href: "/my", match: ["/result"] },
+interface NavSection {
+  title: string | null; // null = the top item(s) without a heading
+  hint?: string;
+  items: NavItem[];
+}
+
+// Both modes share the four primary sections (requirement 2026-09-22_discovery-lab-ui.md):
+// Explore Market → Create & Discover → Test & Analyze → My Strategy Lab.
+// Simple mode: goal-first pages in plain Hinglish.
+const SIMPLE_NAV: NavSection[] = [
+  { title: null, items: [{ label: "Home", hint: "Aaj kya karna hai?", icon: House, href: "/" }] },
+  {
+    title: "Explore Market",
+    hint: "Gold ko samjho",
+    items: [
+      { label: "Market samjho", hint: "Pattern ke baad gold kya karta", icon: ChartLine, href: "/learn" },
+      { label: "Gold chart", hint: "Candles · indicators · levels", icon: CandlestickChart, href: "/chart" },
+    ],
+  },
+  {
+    title: "Create & Discover",
+    hint: "Strategy banao ya AI se dhoondho",
+    items: [
+      { label: "Idea se banao", hint: "5 sawaal · live chart preview", icon: Lightbulb, href: "/idea", match: ["/idea/chart"] },
+      { label: "AI Research", hint: "AI team ko mission do, baat karo", icon: Bot, href: "/ceo-lab" },
+    ],
+  },
+  {
+    title: "Test & Analyze",
+    hint: "Result, graph, chart pe trades",
+    items: [{ label: "Results & replay", hint: "Har test · chart pe verify", icon: PlayCircle, href: "/results", match: ["/result"] }],
+  },
+  {
+    title: "My Strategy Lab",
+    hint: "Safar, versions, agla step",
+    items: [{ label: "Meri strategies", hint: "Kahan tak pahunchi, agla step", icon: Library, href: "/my", match: ["/strategy"] }],
+  },
 ];
 
-// Navigation from new_reference_image.png, extended with the owner's four additions
-// (requirements/2026-09-21_ui-redesign-research-workspace.md). Unbuilt pages stay visible
-// but disabled, labelled with the phase that delivers them.
-const NAV: NavItem[] = [
-  { label: "CEO Work Lab", hint: "Mission do · AI agents research karein", icon: Briefcase, href: "/ceo-lab" },
-  { label: "Overview", hint: "Chart workspace", icon: LayoutDashboard, href: "/" },
-  { label: "Data Center", hint: "Data health · costs", icon: Database, href: "/costs" },
-  { label: "Behaviour Explorer", hint: "Sequences · regimes · S/R", icon: ScanSearch, href: "/explorer" },
-  { label: "Strategy Lab", hint: "AI · Visual · From chart", icon: FlaskConical, href: "/strategy-lab" },
-  { label: "Backtest", hint: "Test performance", icon: History, href: "/backtest" },
-  { label: "Optimize", hint: "Parameter tuning", icon: SlidersHorizontal, href: "/optimize" },
-  { label: "Validate", hint: "Out-of-sample · robustness", icon: ShieldCheck, href: "/validate" },
-  { label: "Research Pipeline", hint: "Hypotheses · runs", icon: Workflow, href: "/pipeline" },
-  { label: "My Strategies", hint: "Library · versions · trials", icon: Library, href: "/strategies" },
-  { label: "ML Lab", hint: "Filters vs rule baseline", icon: BrainCircuit, href: "/ml" },
-  { label: "AI Assistant", hint: "Ideas · explanations", icon: Bot, href: "/assistant" },
+// Expert mode: every research page (new_reference_image.png + the owner's additions,
+// requirements/2026-09-21_ui-redesign-research-workspace.md), grouped the same way.
+const NAV: NavSection[] = [
+  {
+    title: "Explore Market",
+    items: [
+      { label: "Overview", hint: "Chart workspace", icon: LayoutDashboard, href: "/", match: ["/chart"] },
+      { label: "Data Center", hint: "Data health · costs", icon: Database, href: "/costs" },
+      { label: "Behaviour Explorer", hint: "Sequences · regimes · S/R", icon: ScanSearch, href: "/explorer" },
+    ],
+  },
+  {
+    title: "Create & Discover",
+    items: [
+      { label: "CEO Work Lab", hint: "Mission do · AI agents research karein", icon: Briefcase, href: "/ceo-lab" },
+      { label: "Strategy Lab", hint: "AI · Visual · From chart", icon: FlaskConical, href: "/strategy-lab" },
+      { label: "Research Pipeline", hint: "Hypotheses · runs", icon: Workflow, href: "/pipeline" },
+      { label: "AI Assistant", hint: "Ideas · explanations", icon: Bot, href: "/assistant" },
+    ],
+  },
+  {
+    title: "Test & Analyze",
+    items: [
+      { label: "Backtest", hint: "Test performance", icon: History, href: "/backtest" },
+      { label: "Optimize", hint: "Parameter tuning", icon: SlidersHorizontal, href: "/optimize" },
+      { label: "Validate", hint: "Out-of-sample · robustness", icon: ShieldCheck, href: "/validate" },
+      { label: "ML Lab", hint: "Filters vs rule baseline", icon: BrainCircuit, href: "/ml" },
+    ],
+  },
+  {
+    title: "My Strategy Lab",
+    items: [{ label: "My Strategies", hint: "Library · versions · trials", icon: Library, href: "/strategies" }],
+  },
 ];
 
 function isActive(item: NavItem, pathname: string) {
@@ -87,54 +135,65 @@ function Brand() {
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const mode = useMode();
-  const items = mode === "simple" ? SIMPLE_NAV : NAV;
+  const sections = mode === "simple" ? SIMPLE_NAV : NAV;
   return (
-    <nav aria-label="Pages" className="space-y-0.5">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const body = (
-          <>
-            <Icon className="mt-0.5 size-[18px] shrink-0" strokeWidth={1.6} aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-medium">{item.label}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{item.hint}</span>
-            </span>
-            {item.phase !== undefined && (
-              <span className="mt-0.5 rounded border px-1 font-mono text-[10px] text-muted-foreground">P{item.phase}</span>
-            )}
-          </>
-        );
-        if (!item.href) {
-          return (
-            <div
-              key={item.label}
-              aria-disabled
-              title={`Arrives in Phase ${item.phase}`}
-              className="flex cursor-default items-start gap-3 rounded-lg px-3 py-2 text-sidebar-foreground/45"
-            >
-              {body}
-            </div>
-          );
-        }
-        const active = isActive(item, pathname);
-        return (
-          <Link
-            key={item.label}
-            href={item.href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "flex items-start gap-3 rounded-lg px-3 py-2 transition-colors",
-              active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-primary/35 [&_svg]:text-primary"
-                : "text-sidebar-foreground hover:bg-muted",
-            )}
-          >
-            {body}
-          </Link>
-        );
-      })}
+    <nav aria-label="Pages" className="space-y-3">
+      {sections.map((sec, si) => (
+        <div key={sec.title ?? si} className="space-y-0.5">
+          {sec.title && (
+            <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold tracking-[0.16em] text-primary/80 uppercase" title={sec.hint}>
+              {sec.title}
+            </p>
+          )}
+          {sec.items.map((item) => (
+            <NavLink key={item.label} item={item} pathname={pathname} onNavigate={onNavigate} />
+          ))}
+        </div>
+      ))}
     </nav>
+  );
+}
+
+function NavLink({ item, pathname, onNavigate }: { item: NavItem; pathname: string; onNavigate?: () => void }) {
+  const Icon = item.icon;
+  const body = (
+    <>
+      <Icon className="mt-0.5 size-[18px] shrink-0" strokeWidth={1.6} aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium">{item.label}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">{item.hint}</span>
+      </span>
+      {item.phase !== undefined && (
+        <span className="mt-0.5 rounded border px-1 font-mono text-[10px] text-muted-foreground">P{item.phase}</span>
+      )}
+    </>
+  );
+  if (!item.href) {
+    return (
+      <div
+        aria-disabled
+        title={`Arrives in Phase ${item.phase}`}
+        className="flex cursor-default items-start gap-3 rounded-lg px-3 py-2 text-sidebar-foreground/45"
+      >
+        {body}
+      </div>
+    );
+  }
+  const active = isActive(item, pathname);
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex items-start gap-3 rounded-lg px-3 py-1.5 transition-colors",
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-primary/35 [&_svg]:text-primary"
+          : "text-sidebar-foreground hover:bg-muted",
+      )}
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -163,7 +222,7 @@ function ModeSwitch() {
         {opt("expert", "Expert")}
       </div>
       <p className="text-[11px] leading-snug text-muted-foreground">
-        {mode === "simple" ? "Expert mein saare research pages (chart, backtest, validate…) milenge." : "Simple mein sirf 5 aasaan pages."}
+        {mode === "simple" ? "Expert mein saare advanced research tools (backtest, optimize, validate, pipeline…) milenge." : "Simple mein aasaan Hinglish pages — wahi engine, wahi numbers."}
       </p>
     </div>
   );

@@ -16,7 +16,9 @@ function Row({ j }: { j: StrategyJourney }) {
   return (
     <li className="grid grid-cols-1 items-center gap-3 border-t px-4 py-3.5 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_auto_auto]">
       <div className="min-w-0">
-        <p className="truncate text-[15px] font-semibold">{j.row.name}</p>
+        <Link href={`/strategy?spec=${j.row.spec_hash}`} className="block truncate text-[15px] font-semibold hover:text-primary hover:underline">
+          {j.row.name}
+        </Link>
         <p className="text-xs text-muted-foreground">
           {j.by} · {ago(j.row.last_run ?? j.row.created_at)}
         </p>

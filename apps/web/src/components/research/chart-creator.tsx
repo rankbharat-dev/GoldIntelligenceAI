@@ -8,12 +8,48 @@ import { Notice, Section } from "@/components/research/bits";
 import { conditionText } from "@/components/research/conditions";
 import { LayerToggles, StructureLegend, useStructure, type Layer } from "@/components/structure-layer";
 import { Button } from "@/components/ui/button";
+import { ruleWord } from "@/lib/plain";
 import { explore, research, type Condition, type Side } from "@/lib/research";
 import { cn } from "@/lib/utils";
 
 /** Chart-Based Creator: mark the bar you would have entered on; its measurable features
  *  become a rule draft you tick through, then it goes to the Visual Builder. */
-export function ChartCreator({ onUse }: { onUse: (side: Side, conditions: Condition[], sessions: string[] | null) => void }) {
+const WORDS = {
+  en: {
+    t1: "1 · Mark the entry bar",
+    d1: "The chart opens at the end of tier B (tier C is sealed). Scroll to a setup you like and click the candle where you would have entered (at its close). Overlays show what the structure detectors saw at the time.",
+    t2: "2 · Keep what describes the setup",
+    d2: "Each line is a measurable fact about the marked bar. Tick 2–4; more than that describes one bar, not a pattern.",
+    none: "No bar marked yet.",
+    reading: "Reading the bar…",
+    t3: "3 · Review in the Visual Builder",
+    use: "Use these rules",
+    long: "long",
+    short: "short",
+  },
+  hi: {
+    t1: "1 · Entry wali candle pe click karo",
+    d1: "Chart check data ke aakhir pe khulta hai (final exam data band hai). Peeche scroll karke koi setup dhoondho jo aapko pasand ho, aur us candle pe click karo jahan aap entry lete (candle band hone pe). Lines = swing, support/resistance, trendline.",
+    t2: "2 · Setup ko kaunsi baatein batati hain?",
+    d2: "Har line us candle ka ek naapne layak fact hai. 2–4 tick karo — zyada tick kiye to rule sirf ek candle ka ban jaata hai, pattern ka nahi.",
+    none: "Abhi koi candle nahi chuni.",
+    reading: "Candle padh rahe hain…",
+    t3: "3 · Aage badho",
+    use: "In rules se strategy banao",
+    long: "Buy",
+    short: "Sell",
+  },
+};
+
+export function ChartCreator({
+  onUse,
+  plain = false,
+}: {
+  onUse: (side: Side, conditions: Condition[], sessions: string[] | null) => void;
+  /** Simple-mode wording (Hinglish). */
+  plain?: boolean;
+}) {
+  const w = WORDS[plain ? "hi" : "en"];
   const [side, setSide] = useState<Side>("long");
   const [bar, setBar] = useState<number | null>(null);
   const [picked, setPicked] = useState<Record<number, boolean>>({});
@@ -38,8 +74,8 @@ export function ChartCreator({ onUse }: { onUse: (side: Side, conditions: Condit
   return (
     <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_400px]">
       <Section
-        title="1 · Mark the entry bar"
-        description="The chart opens at the end of tier B (tier C is sealed). Scroll to a setup you like and click the candle where you would have entered (at its close). Overlays show what the structure detectors saw at the time."
+        title={w.t1}
+        description={w.d1}
       >
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <LayerToggles value={layers} onChange={setLayers} loading={structure.loading} />
@@ -59,7 +95,7 @@ export function ChartCreator({ onUse }: { onUse: (side: Side, conditions: Condit
                     : "text-muted-foreground",
                 )}
               >
-                {s}
+                {w[s]}
               </button>
             ))}
           </span>
@@ -87,17 +123,19 @@ export function ChartCreator({ onUse }: { onUse: (side: Side, conditions: Condit
       </Section>
 
       <aside className="space-y-3">
-        <Section title="2 · Keep what describes the setup" description="Each line is a measurable fact about the marked bar. Tick 2–4; more than that describes one bar, not a pattern.">
-          {bar == null && <p className="text-xs text-muted-foreground">No bar marked yet.</p>}
+        <Section title={w.t2} description={w.d2}>
+          {bar == null && <p className="text-xs text-muted-foreground">{w.none}</p>}
           {draft.isError && <Notice tone="error">{(draft.error as Error).message}</Notice>}
-          {draft.isFetching && <p className="text-xs text-muted-foreground">Reading the bar…</p>}
+          {draft.isFetching && <p className="text-xs text-muted-foreground">{w.reading}</p>}
           {draft.data && (
             <div className="space-y-1.5">
               {draft.data.suggestions.map((s, i) => (
                 <label key={i} className="flex cursor-pointer items-start gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/40">
                   <input type="checkbox" className="mt-0.5" checked={chosen(i)} onChange={(e) => setPicked({ ...picked, [i]: e.target.checked })} />
                   <span className="min-w-0">
-                    <span className="block font-mono text-[11px]">{conditionText(s.condition)}</span>
+                    <span className={plain ? "block text-xs font-medium" : "block font-mono text-[11px]"}>
+                      {plain ? ruleWord(s.condition.feature, s.condition.op, s.condition.value) : conditionText(s.condition)}
+                    </span>
                     <span className="block text-[11px] text-muted-foreground">{s.why}</span>
                   </span>
                 </label>
@@ -112,12 +150,14 @@ export function ChartCreator({ onUse }: { onUse: (side: Side, conditions: Condit
             </div>
           )}
         </Section>
-        <Section title="3 · Review in the Visual Builder">
+        <Section title={w.t3}>
           <p className="mb-2 text-xs text-muted-foreground">
-            {selected.length} condition{selected.length === 1 ? "" : "s"} selected · enter {side}. Nothing is tested until you run it there.
+            {plain
+              ? `${selected.length} baatein chuni · ${w[side]}. Abhi kuch test nahi hua — agle kadam mein stop/target chunke test chalega.`
+              : `${selected.length} condition${selected.length === 1 ? "" : "s"} selected · enter ${side}. Nothing is tested until you run it there.`}
           </p>
           <Button size="sm" disabled={!selected.length} onClick={() => onUse(side, selected, useSession ? (draft.data?.filters.sessions ?? null) : null)}>
-            Use these rules
+            {w.use}
           </Button>
         </Section>
       </aside>

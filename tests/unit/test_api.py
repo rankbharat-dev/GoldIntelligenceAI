@@ -150,3 +150,29 @@ def test_feature_endpoints_reject_bad_input(feature_client) -> None:
 
 def test_features_404_without_a_feature_set(client) -> None:
     assert client.get(f"/api/features/{DATASET}").status_code == 404
+
+
+def test_indicators_rebuild_price_levels_from_feature_distances(client, tmp_path) -> None:
+    """level = close − dist × ATR, with ATR = atr_pts × point (point from the manifest)."""
+    root = tmp_path / "derived" / "xauusd" / DATASET
+    man = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    (root / "manifest.json").write_text(json.dumps(man | {"symbol_spec": {"point": 0.01}}), encoding="utf-8")
+    main._manifest.cache_clear()
+    fs = root / "features" / "s_f20260101T000000Z"
+    fs.mkdir(parents=True)
+    t0 = datetime(2026, 1, 5)
+    ev = [t0 + timedelta(minutes=5 * i) for i in range(10)]
+    cols = {c: [0.0] * 10 for c in main.INDICATOR_COLS}
+    cols |= {"atr_pts": [200.0] * 10, "ema9_dist_atr": [0.5] * 10, "bb_pctb": [0.25] * 10,
+             "bb_width_atr": [4.0] * 10, "rsi14": [float("nan")] + [55.0] * 9}
+    pl.DataFrame({"event_time": ev, **cols}).with_columns(pl.col("event_time").cast(pl.Datetime("us"))).write_parquet(
+        fs / "features_M5.parquet"
+    )
+    (fs / "feature_set.json").write_text("{}", encoding="utf-8")
+    r = client.get("/api/indicators", params={"start": epoch(t0), "end": epoch(t0 + timedelta(minutes=15))}).json()
+    assert r["count"] == 3 and r["time"][0] == epoch(t0)
+    # bar 0: close 0.5, ATR = 2.0 → ema9 = 0.5 − 1.0; BB width 8 → lower = 0.5 − 2, upper = lower + 8
+    assert r["price"]["ema9"][0] == -0.5 and r["price"]["ema50"][0] == 0.5
+    assert r["price"]["bb_lower"][0] == -1.5 and r["price"]["bb_upper"][0] == 6.5
+    assert r["osc"]["rsi14"][:2] == [None, 55.0]
+    assert client.get("/api/indicators", params={"start": 10, "end": 5}).status_code == 422

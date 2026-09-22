@@ -393,6 +393,75 @@ def feature_bar(
     }
 
 
+INDICATOR_COLS = (
+    "atr_pts",
+    "ema9_dist_atr",
+    "ema21_dist_atr",
+    "ema50_dist_atr",
+    "ema200_dist_atr",
+    "bb_pctb",
+    "bb_width_atr",
+    "bb_mid_dist_atr",
+    "vwap_dist_atr",
+    "rsi14",
+    "macd_hist_atr",
+    "stoch_k14",
+    "adx14",
+)
+MAX_INDICATOR_BARS = 6000
+
+
+@app.get("/api/indicators")
+def indicators(
+    start: Annotated[int, Query(description="UTC epoch seconds (M5 bar open), inclusive")],
+    end: Annotated[int, Query(description="UTC epoch seconds (M5 bar open), exclusive")],
+    dataset: str = "latest",
+) -> dict[str, Any]:
+    """The engine's own M5 indicators over a window, as chart lines: EMA 9/21/50/200,
+    Bollinger (50, 2.1) and session VWAP rebuilt to price from the stored feature
+    distances (``level = close − dist × ATR``, ATR = atr_pts × point), plus RSI 14,
+    MACD histogram (ATR units), Stochastic %K and ADX as stored. Nothing is recomputed,
+    so the chart shows exactly what the strategy rules read."""
+    if end <= start:
+        raise HTTPException(422, "end must be after start")
+    ds = _resolve(dataset)
+    fs = _feature_set_dir(ds)
+    lo = datetime.fromtimestamp(start, tz=UTC).replace(tzinfo=None)
+    hi = datetime.fromtimestamp(end, tz=UTC).replace(tzinfo=None)
+    point = float(_manifest(ds)["symbol_spec"]["point"])
+    f = (
+        pl.scan_parquet(fs / "features_M5.parquet")
+        .filter((pl.col("event_time") >= lo) & (pl.col("event_time") < hi))
+        .select("event_time", *INDICATOR_COLS)
+    )
+    bars = pl.scan_parquet(_root() / ds / "M5.parquet").select(pl.col("ts_utc").alias("event_time"), "close")
+    df = f.join(bars, on="event_time", how="inner").sort("event_time").head(MAX_INDICATOR_BARS).collect()
+    atr = pl.col("atr_pts") * point
+    c = pl.col("close")
+    bb_lo = c - pl.col("bb_pctb") * pl.col("bb_width_atr") * atr
+    df = df.with_columns(
+        *[(c - pl.col(f"ema{n}_dist_atr") * atr).alias(f"ema{n}") for n in (9, 21, 50, 200)],
+        bb_lower=bb_lo,
+        bb_upper=bb_lo + pl.col("bb_width_atr") * atr,
+        bb_mid=c - pl.col("bb_mid_dist_atr") * atr,
+        vwap=c - pl.col("vwap_dist_atr") * atr,
+    )
+
+    def col(name: str, digits: int) -> list[float | None]:
+        return [None if v is None or v != v else round(v, digits) for v in df[name].to_list()]
+
+    return {
+        "dataset_id": ds,
+        "feature_set_id": fs.name,
+        "timeframe": "M5",
+        "count": df.height,
+        "truncated": df.height == MAX_INDICATOR_BARS,
+        "time": df["event_time"].dt.epoch("s").to_list(),
+        "price": {k: col(k, 3) for k in ("ema9", "ema21", "ema50", "ema200", "bb_upper", "bb_mid", "bb_lower", "vwap")},
+        "osc": {k: col(k, 3) for k in ("rsi14", "macd_hist_atr", "stoch_k14", "adx14")},
+    }
+
+
 def main() -> None:
     import uvicorn
 

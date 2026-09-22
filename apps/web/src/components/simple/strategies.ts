@@ -25,7 +25,7 @@ export interface StrategyJourney {
 
 const num = (x: unknown) => (typeof x === "number" ? x : null);
 
-function journey(row: SpecRow, runs: RunRow[]): StrategyJourney {
+export function journey(row: SpecRow, runs: RunRow[]): StrategyJourney {
   const bt = runs.find((r) => r.kind === "backtest") ?? null;
   const va = runs.find((r) => r.kind === "validate") ?? null;
   const opt = runs.some((r) => r.kind === "optimize");

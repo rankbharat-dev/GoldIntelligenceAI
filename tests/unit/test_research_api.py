@@ -136,3 +136,19 @@ def test_validate_then_unseal_once(client) -> None:
     assert again.status_code == 409
     fams = client.get("/api/research/overview").json()["families"]
     assert next(f for f in fams if f["family"] == "ddu")["holdout_used"] is True
+
+
+def test_explain_checks_each_rule_on_the_decision_bar(client, mk) -> None:
+    """The owner can check a trade against their own rules: each condition + filter with
+    the bar's actual value, evaluated by the engine; tier C bars are refused."""
+    spec = SPEC | {"filters": {"sessions": ["london", "new_york", "asian", "london_ny_overlap", "off"]}}
+    prev = client.post("/api/strategy/preview", json={"spec": spec, "limit": 1}).json()
+    t = prev["event_time"][0] + 300  # decision = the bar's close
+    r = client.post("/api/strategy/explain", json={"spec": spec, "time": t}).json()
+    assert r["fires"] is True and r["event_time"] == prev["event_time"][0]
+    cond = r["entries"][0]["conditions"][0]
+    assert cond == {"feature": "dirs_3", "op": "==", "value": "DDU", "actual": "DDU", "passed": True}
+    assert [f["key"] for f in r["filters"]] == ["hygiene", "sessions"]
+    c_start = int((mk.split.c_start - datetime(1970, 1, 1)).total_seconds())
+    assert client.post("/api/strategy/explain", json={"spec": spec, "time": c_start + 300}).status_code == 403
+    assert client.post("/api/strategy/explain", json={"spec": spec, "time": t + 7}).status_code == 404

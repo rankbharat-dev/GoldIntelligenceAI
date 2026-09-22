@@ -11,6 +11,7 @@ import { BucketTable, Notice, PageHeader, Section, Stat, toneOf } from "@/compon
 import { EquityChart, SCENARIO_COLOR } from "@/components/research/equity-chart";
 import { JobProgress, useJob } from "@/components/research/jobs";
 import { StrategyPicker } from "@/components/research/strategy-picker";
+import { TradeReplay } from "@/components/replay/trade-replay";
 import { Button } from "@/components/ui/button";
 import {
   fmtDate,
@@ -426,6 +427,13 @@ function RunView({ id }: { id: string }) {
       </Section>
 
       <Trades run={run} />
+
+      <Section
+        title="Trade replay · rule check"
+        description="Pessimistic trades on the chart with entry / SL / TP zones, the engine's stored indicators, bar-by-bar replay, and each entry condition + filter evaluated on the decision bar (POST /api/strategy/explain)."
+      >
+        <TradeReplay run={run} />
+      </Section>
 
       <p className="px-1 text-[11px] text-muted-foreground">
         {run.lineage.dataset_id} · {run.lineage.cost_model_id} · {run.lineage.feature_set_id} · code{" "}

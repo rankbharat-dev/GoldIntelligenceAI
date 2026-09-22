@@ -74,6 +74,22 @@ export function fetchCandles(tf: Timeframe, before?: number, limit = 1500, datas
   return getJson<CandlesResponse>(`/api/candles?${q}`);
 }
 
+/** The engine's own M5 indicators over a window, rebuilt to price (GET /api/indicators). */
+export interface IndicatorsResponse {
+  dataset_id: string;
+  feature_set_id: string;
+  count: number;
+  truncated: boolean;
+  time: number[]; // UTC epoch seconds, M5 bar open
+  price: Record<"ema9" | "ema21" | "ema50" | "ema200" | "bb_upper" | "bb_mid" | "bb_lower" | "vwap", (number | null)[]>;
+  osc: Record<"rsi14" | "macd_hist_atr" | "stoch_k14" | "adx14", (number | null)[]>;
+}
+
+export function fetchIndicators(start: number, end: number, dataset = "latest") {
+  const q = new URLSearchParams({ start: String(start), end: String(end), dataset });
+  return getJson<IndicatorsResponse>(`/api/indicators?${q}`);
+}
+
 // ---------------------------------------------------------------- costs (Phase 2)
 
 export type CostStat = "p25" | "p50" | "p90" | "p99" | "mean";

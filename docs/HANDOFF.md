@@ -263,6 +263,20 @@ momentum buy small: 699 trades, +0.06 R before costs → −0.17 R after, "costs
 re-test −0.12 R), Meri strategies journeys, Market samjho (18 behaviours, 0 pass after costs),
 Expert switch, phone width.
 
+## 6g. Gold Strategy Discovery Lab UI (done 2026-09-22) — requirement `requirements/2026-09-22_discovery-lab-ui.md`
+
+Owner: "charts pe kaise verify krenge ki trade mere according liya". Built on top of Simple mode,
+engine unchanged. Two read-only endpoints: `GET /api/indicators` (stored M5 indicators rebuilt to
+price) and `POST /api/strategy/explain` (each rule + filter on one decision bar, tier C → 403).
+**Trade replay** (`components/replay/`) on `/result` and Expert `/backtest`: entry/SL/TP zones,
+EMA/BB/VWAP/RSI, bar-by-bar replay, engine rule check. New pages: `/results` (Test & Analyze),
+`/idea/chart` (Hinglish chart-based creation), `/strategy?spec=` (journey: stage, history, versions,
+final-check items, why it failed, next action). `/idea` has a live chart preview; CEO Lab missions
+have one research chat (replaces Director Room + activity log) with follow-up missions. Sidebar
+in both modes grouped as Explore Market · Create & Discover · Test & Analyze · My Strategy Lab.
+Verified on the scratch servers (wizard → test → replay rule check, 1:3 version, journey, chat,
+phone width); 190 tests green; `next build` OK.
+
 ## 7. Start-of-session checklist
 
 ```powershell

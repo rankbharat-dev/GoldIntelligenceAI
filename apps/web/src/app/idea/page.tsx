@@ -4,8 +4,9 @@ import { ArrowLeft, ArrowRight, CircleHelp, PenTool } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { IdeaPreview } from "@/components/simple/idea-preview";
 import { TestProgress, useTestRun } from "@/components/simple/ui";
-import { byId, PATTERNS, RISKS, SESSIONS, SIDES, sentenceOf, specOf, TERMS, type Choice, type WizardAnswers } from "@/lib/plain";
+import { byId, PATTERNS, previewSpecOf, RISKS, SESSIONS, SIDES, sentenceOf, specOf, TERMS, type Choice, type WizardAnswers } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 
 // Simple mode · "Mera idea test karo": five plain questions → a real strategy spec →
@@ -34,6 +35,7 @@ export default function IdeaWizard() {
   const chosen = review ? null : a[cur.key as Key];
   const canNext = review || !!chosen || (cur.key === "session" && fixedSession);
   const spec = specOf(a);
+  const preview = previewSpecOf(a);
 
   const go = (d: number) => {
     let s = step + d;
@@ -50,7 +52,7 @@ export default function IdeaWizard() {
   const pct = test.job ? Math.round(test.job.progress * 100) : null;
 
   return (
-    <div className="grid min-h-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid min-h-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(380px,40%)]">
       <section className="flex flex-col gap-6 px-4 py-8 md:px-10">
         <div className="space-y-2">
           <div className="flex justify-between text-sm text-muted-foreground">
@@ -92,7 +94,7 @@ export default function IdeaWizard() {
             })}
             {cur.key === "pattern" && (
               <Link
-                href="/strategy-lab?mode=chart"
+                href="/idea/chart"
                 className="flex min-h-28 flex-col gap-1.5 rounded-2xl border-2 border-dashed p-5 text-left hover:bg-muted/40"
               >
                 <span className="flex items-center gap-2 text-base font-semibold">
@@ -100,7 +102,7 @@ export default function IdeaWizard() {
                   Chart pe khud dikhaunga
                 </span>
                 <span className="text-sm leading-relaxed text-muted-foreground">
-                  Chart pe us candle pe click karo jahan aap entry lete — engine rules bana dega (Expert tool khulega).
+                  Asli chart pe us candle pe click karo jahan aap entry lete — engine us candle ke facts se rules bana dega.
                 </span>
               </Link>
             )}
@@ -166,15 +168,21 @@ export default function IdeaWizard() {
         </div>
       </section>
 
-      <aside aria-label="Aapki strategy abhi tak" className="flex flex-col gap-4 border-t bg-sidebar px-6 py-8 lg:border-t-0 lg:border-l">
-        <p className="text-xs font-semibold tracking-[0.18em] text-primary">AAPKI STRATEGY ABHI TAK</p>
-        {summary.map((s) => (
-          <div key={s.label} className="border-b pb-3">
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-            <p className={cn("text-[15px] font-medium", !s.value && "text-muted-foreground/60")}>{s.value ?? "abhi chuna nahi"}</p>
-          </div>
-        ))}
-        <div className="mt-auto rounded-xl bg-card p-4 text-sm leading-relaxed">
+      <aside aria-label="Aapki strategy abhi tak" className="flex flex-col gap-4 border-t bg-sidebar px-5 py-8 lg:sticky lg:top-0 lg:max-h-dvh lg:overflow-y-auto lg:border-t-0 lg:border-l">
+        <p className="text-xs font-semibold tracking-[0.18em] text-primary">AAPKI STRATEGY — LIVE</p>
+        <p className={cn("rounded-xl border px-4 py-3 text-[15px] leading-relaxed", pattern ? "border-primary/40 bg-primary/10" : "text-muted-foreground")}>
+          {pattern ? sentenceOf(a) : "Jaise-jaise aap chunoge, aapki strategy yahan aam bhasha mein banti jaayegi."}
+        </p>
+        <IdeaPreview spec={preview} />
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {summary.map((s) => (
+            <div key={s.label} className="border-b pb-2">
+              <p className="text-[11px] text-muted-foreground">{s.label}</p>
+              <p className={cn("text-sm font-medium", !s.value && "text-muted-foreground/60")}>{s.value ?? "abhi chuna nahi"}</p>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-xl bg-card p-4 text-sm leading-relaxed">
           <p className="mb-1 flex items-center gap-2 font-semibold text-primary">
             <CircleHelp className="size-4" />
             &quot;× aam candle&quot; kya hai?

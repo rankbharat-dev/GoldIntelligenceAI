@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 import { AGENT_ICON, AGENT_NAME, ago, Chip, CopyCommand, MISSION_LABEL, TASK_LABEL } from "./bits";
 import { StrategyCompare } from "./compare";
-import { DirectorRoom } from "./director-room";
+import { ResearchChat } from "./chat";
 import { LiveDot, RunAgents, UsagePanel, useMissionStream } from "./live";
 
 const VERDICT: Record<Report["verdict"], { text: string; cls: string }> = {
@@ -125,16 +125,7 @@ export function MissionDetail({ id }: { id: string }) {
 
       {m.report && <ReportCard r={m.report} />}
 
-      <DirectorRoom m={m} />
-
-      {m.plan_note && (
-        <section className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
-          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-            <AgentIcon agent="director" /> Director ka plan
-          </h3>
-          <p className="text-xs leading-relaxed whitespace-pre-line text-muted-foreground">{m.plan_note}</p>
-        </section>
-      )}
+      <ResearchChat m={m} />
 
       {m.tasks.length > 0 && (
         <section className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
@@ -154,8 +145,6 @@ export function MissionDetail({ id }: { id: string }) {
       )}
 
       {hashes.length > 0 && <StrategyCompare hashes={hashes} />}
-
-      <Activity m={m} />
     </div>
   );
 }
@@ -408,35 +397,6 @@ function ReportCard({ r }: { r: Report }) {
         <Bullets title="Limitations (dhyan rakhein)" items={r.limitations} />
         <p className="text-[11px] text-muted-foreground">Yeh research hai, trading advice nahi. Har number upar diye run se aata hai.</p>
       </div>
-    </section>
-  );
-}
-
-const ACTOR_LABEL: Record<string, string> = { ...AGENT_NAME, ceo: "Aap (CEO)", director: "Director", system: "System" };
-
-function Activity({ m }: { m: Mission }) {
-  const [all, setAll] = useState(false);
-  const ev = [...m.events].reverse();
-  const shown = all ? ev : ev.slice(0, 12);
-  return (
-    <section className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
-      <h3 className="mb-2 text-sm font-semibold">Live activity</h3>
-      <ul className="space-y-1 text-xs">
-        {shown.map((e) => (
-          <li key={e.event_id} className="flex gap-2">
-            <span className="w-20 shrink-0 text-[11px] text-muted-foreground">{ago(e.created_at)}</span>
-            <span className="w-28 shrink-0 truncate font-medium">{ACTOR_LABEL[e.actor] ?? e.actor}</span>
-            <span className={cn("min-w-0 flex-1 break-words text-muted-foreground", (e.kind === "task_failed" || e.kind === "deadline") && "text-red-300")}>
-              {e.message}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {ev.length > 12 && (
-        <button className="mt-2 text-[11px] text-primary hover:underline" onClick={() => setAll((a) => !a)}>
-          {all ? "Kam dikhao" : `Sab dikhao (${ev.length})`}
-        </button>
-      )}
     </section>
   );
 }

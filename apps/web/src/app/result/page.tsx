@@ -6,7 +6,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { TradeReplay } from "@/components/replay/trade-replay";
 import { Help, Pill, TestProgress, Tracker, useTestRun, type StageState } from "@/components/simple/ui";
+import { EquityStory, WhereItWorks, WhyPanel } from "@/components/simple/why";
 import { TIER_PLAIN, totalCostR, verdictOf, widerExits, type TermKey, type Verdict } from "@/lib/plain";
 import { fmtInt, fmtNum, fmtPct, fmtR, research, type BacktestRun, type Metrics } from "@/lib/research";
 import { cn } from "@/lib/utils";
@@ -81,7 +83,7 @@ function ResultView({ run }: { run: BacktestRun }) {
   const [expert, setExpert] = useState(false);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:px-8">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <span>
           <Link href="/my" className="hover:text-foreground">
@@ -114,6 +116,24 @@ function ResultView({ run }: { run: BacktestRun }) {
         <Tile term="trades" label="Kitne trades mile" value={fmtInt(m.n)} sub={`${fmtPct(m.win_rate, 0)} trades faayde mein`} />
         <Tile term="drawdown" label="Sabse bada gira hua nuksaan" value={m.max_dd_r != null ? `${fmtNum(m.max_dd_r, 1)} R` : "—"} sub="upar ke peak se neeche tak" />
       </section>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <WhyPanel m={m} v={v} />
+        <EquityStory m={m} />
+      </div>
+
+      <section aria-label="Chart pe verify karo" className="space-y-3 rounded-2xl border border-primary/30 bg-card p-5">
+        <div>
+          <h2 className="text-lg font-bold">Chart pe verify karo — har trade, aapke rules ke saath</h2>
+          <p className="text-sm text-muted-foreground">
+            Koi bhi trade chuno: asli XAUUSD chart pe signal candle, entry, stop-loss aur target dikhega. Right side mein engine batata hai ki us
+            candle pe aapka har rule sach tha ya nahi. &quot;Replay&quot; dabao — candle-by-candle trade chalte hue dekho.
+          </p>
+        </div>
+        <TradeReplay run={run} />
+      </section>
+
+      <WhereItWorks m={m} />
 
       <CostStory m={m} />
 

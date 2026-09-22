@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Annotated, Any, Literal
 
+import polars as pl
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field, ValidationError
 
@@ -165,6 +166,79 @@ def strategy_preview(body: PreviewBody) -> dict[str, Any]:
         },
         "event_time": [_epoch(t) for t in visible["event_time"].to_list()],
         "side": visible["side"].to_list(),
+    }
+
+
+class ExplainBody(BaseModel):
+    spec: dict[str, Any]
+    time: int  # UTC epoch seconds: a trade's decision_time (the decision bar's close)
+
+
+def _plain(v: Any) -> Any:
+    if isinstance(v, float):
+        return None if v != v else round(v, 5)
+    return v
+
+
+@router.post("/strategy/explain")
+def strategy_explain(body: ExplainBody) -> dict[str, Any]:
+    """Why a rule fired (or did not) on one decision bar: every entry condition and
+    filter of the spec with the bar's actual value, evaluated by the engine's own
+    expressions. Lets the owner check a trade on the chart against their rules.
+    Bars inside the sealed tier C are refused."""
+    s = parse_spec(body.spec)
+    mk = get_market()
+    t = datetime.fromtimestamp(body.time, UTC).replace(tzinfo=None)
+    if t >= mk.split.c_start:
+        raise HTTPException(403, "This bar is in tier C (final exam data) — sealed.")
+    cols = sig.columns_needed(s)
+    row = mk.features(cols).filter(pl.col("available_at") == t)
+    if row.is_empty():
+        raise HTTPException(404, f"No decision bar closes at {t.isoformat()} UTC")
+
+    def check(expr: pl.Expr) -> bool:
+        return bool(row.select(expr.alias("_x"))["_x"][0])
+
+    entries = []
+    for e in s.entries:
+        conds = [
+            {
+                "feature": c.feature,
+                "op": c.op,
+                "value": c.value,
+                "actual": _plain(row[c.feature][0]),
+                "passed": check(sig.condition_expr(c)),
+            }
+            for c in e.conditions
+        ]
+        entries.append({"side": e.side, "conditions": conds, "passed": all(c["passed"] for c in conds)})
+
+    f = s.filters
+    filters = [
+        {"key": "hygiene", "value": None, "actual": _plain(row["hyg_no_entry"][0]),
+         "passed": check(~pl.col("hyg_no_entry").fill_null(True))},
+    ]
+    for key, col, want in (
+        ("sessions", "session", f.sessions),
+        ("vol_regimes", "vol_regime", f.vol_regimes),
+        ("hours_utc", "hour_utc", f.hours_utc),
+        ("weekdays", "dow", f.weekdays),
+    ):
+        if want is not None:
+            filters.append({"key": key, "value": want, "actual": _plain(row[col][0]),
+                            "passed": check(pl.col(col).is_in(want).fill_null(False))})
+    if f.max_spread_rel is not None:
+        filters.append({"key": "max_spread_rel", "value": f.max_spread_rel, "actual": _plain(row["spread_rel"][0]),
+                        "passed": check((pl.col("spread_rel") <= f.max_spread_rel).fill_null(False))})
+    gate = check(sig.filter_expr(f))
+    return {
+        "spec_hash": s.spec_hash,
+        "decision_time": body.time,
+        "event_time": _epoch(row["event_time"][0]),
+        "atr_pts": _plain(row["atr_pts"][0]),
+        "entries": entries,
+        "filters": filters,
+        "fires": gate and (sum(e["passed"] for e in entries) > 0),
     }
 
 

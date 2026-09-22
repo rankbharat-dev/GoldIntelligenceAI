@@ -298,6 +298,17 @@ export interface Preview {
   side: (1 | -1)[];
 }
 
+/** One decision bar checked against a spec's rules (POST /api/strategy/explain). */
+export interface Explain {
+  spec_hash: string;
+  decision_time: number;
+  event_time: number;
+  atr_pts: number | null;
+  entries: { side: Side; passed: boolean; conditions: (Condition & { actual: Scalar | null; passed: boolean })[] }[];
+  filters: { key: "hygiene" | "sessions" | "vol_regimes" | "hours_utc" | "weekdays" | "max_spread_rel"; value: unknown; actual: Scalar | null; passed: boolean }[];
+  fires: boolean;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -722,7 +733,8 @@ export const ml = {
 export const research = {
   catalogue: () => call<Catalogue>("/api/strategy/catalogue"),
   validate: (spec: StrategySpec) => post<{ ok: true; spec_hash: string; features_used: string[] }>("/api/strategy/validate", spec),
-  preview: (spec: StrategySpec) => post<Preview>("/api/strategy/preview", { spec }),
+  preview: (spec: StrategySpec, limit = 2000) => post<Preview>("/api/strategy/preview", { spec, limit }),
+  explain: (spec: StrategySpec, time: number) => post<Explain>("/api/strategy/explain", { spec, time }),
   save: (spec: StrategySpec, parent_hash?: string | null) => post<{ spec_hash: string }>("/api/strategies", { spec, parent_hash }),
   strategies: () => call<SpecRow[]>("/api/strategies"),
   strategy: (hash: string) =>

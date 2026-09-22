@@ -26,6 +26,32 @@ Sidebar ke neeche **Simple / Expert** switch hai. Expert mein neeche wale saare 
 
 ---
 
+## Naya: Gold Strategy Discovery Lab (22 Sep 2026, shaam)
+
+Sidebar ab **4 hisson** mein hai: **Explore Market** (gold samjho) · **Create & Discover**
+(strategy banao / AI se dhoondho) · **Test & Analyze** (result + chart) · **My Strategy Lab**
+(har strategy ka safar). Expert mode mein bhi wahi 4 hisse, saare purane pages ke saath.
+
+- **Chart pe verify karo** (har result page pe): koi bhi trade chuno → asli chart pe signal
+  candle (sona gola), BUY/SELL, SL (laal dabba), TP (hara dabba), exit. Right side mein engine
+  batata hai ki us candle pe aapka **har rule sach tha ya nahi** (✓/✗ aur asli value).
+  "Replay" dabao — trade candle-by-candle chalta hua dikhega. EMA, Bollinger, VWAP, RSI buttons
+  se indicators on/off — yeh engine ke apne values hain, wahi jo rules padhte hain.
+- **Idea se banao**: har jawab ke saath right side mein chart pe dikhta hai ki pattern kahan
+  banta hai (▲ buy, ▼ sell) aur kitni baar. Yeh test nahi hai — koshish nahi ginta.
+- **Chart pe setup mark karo**: candle pe click → engine us candle ke facts dikhata hai →
+  2–4 chuno → stop/target → test.
+- **AI Research**: har mission ek chat hai — Director ka plan, har agent ka kaam (source run ke
+  saath), aapke sawaal. Jawab tab aata hai jab agents agli baar chalte hain. Mission khatam
+  hone pe "Isko test karwao" se agla sawaal naya mission ban jaata hai.
+- **Strategy ka safar** (Meri strategies → naam pe click): kahan tak pahunchi, kyun fail hui,
+  saare tests, versions (kya badla), final check ke items, aur agla kadam.
+
+Yaad rahe: pehla test pass = sirf agle kadam ki ijaazat. Final check + final exam pass hone
+tak koi strategy "profitable" nahi kahi jaati.
+
+---
+
 ## 0. Ek line mein
 
 Yeh **gold (XAUUSD) trading ideas ko imaandari se test karne ki lab** hai. Aap ya AI koi idea
