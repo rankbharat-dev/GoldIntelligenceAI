@@ -38,7 +38,7 @@ function CeoLab() {
   return (
     <div className="space-y-3 p-3">
       <PageHeader
-        title="CEO Work Lab"
+        title="AI Research · CEO Work Lab"
         subtitle="Aap CEO ho. Mission likho → Claude Code mein /ceo-run → paanch AI agents research karte hain → report yahin aati hai. Har number engine ke asli run se."
       />
 

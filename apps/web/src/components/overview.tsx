@@ -51,7 +51,7 @@ const METHODS: { title: string; body: string; icon: LucideIcon; phase: number; h
   },
 ];
 
-export default function OverviewPage() {
+export function OverviewPage() {
   const [tf, setTf] = useState<Timeframe>("M5");
   const [zone, setZone] = useState<DisplayZone>("Asia/Kolkata");
   // The clicked bar belongs to the timeframe it was clicked on; switching timeframe clears it.

@@ -20,6 +20,7 @@ storage/reports/
 storage/research/runs/
 storage/research/models/
 storage/research/cost_profile.json
+storage/scratch/
 mlruns/
 
 # node

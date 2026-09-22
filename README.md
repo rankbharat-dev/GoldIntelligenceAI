@@ -13,6 +13,7 @@ execution. Independent of Shiibaa.
 | [docs/TECH_SELECTION.md](docs/TECH_SELECTION.md) | Library choices, backtesting decision, custom components |
 | [docs/reviews/mt5-mcp-security-review.md](docs/reviews/mt5-mcp-security-review.md) | Why external MT5 MCP servers were rejected |
 | [docs/requirements/](docs/requirements/) | Owner requirements, verbatim and dated |
+| [docs/guides/FEATURE_GUIDE_HINGLISH.md](docs/guides/FEATURE_GUIDE_HINGLISH.md) | **Owner guide** — every feature and keyword in simple Hinglish (+ PPT) |
 
 ## Status
 
@@ -23,10 +24,10 @@ execution. Independent of Shiibaa.
 | Raw ingestion (`ci-ingest raw`) | M1 2021-07 → now (1.84 M bars), broker M5/M15/H1 reference, 223 days of ticks (70.8 M) |
 | Data build (`ci-data build`) | Clock inferred (UTC+0), quality gate passed, M5/M15/H1 match broker bars 100 % |
 | Cost model (`ci-costs build`) | Spread per M1/M5 bar (measured / modeled), 3 scenarios, slippage, commission, swap; validated out-of-sample |
-| Feature store (`ci-features build`) | features/3: M5 features per bar incl. market structure and previous-day sweeps (anatomy, sequence, volatility, DST-aware sessions, daily, M15/H1 context, spread, §5.3 hygiene), each row with `available_at`; build blocked unless the leakage self-check passes |
+| Feature store (`ci-features build`) | features/4: M5 features per bar incl. market structure, previous-day sweeps and classic indicators (Bollinger 50/2.1, EMA 9/21/50/200, RSI, MACD, Stochastic, ADX, VWAP, OBV) (anatomy, sequence, volatility, DST-aware sessions, daily, M15/H1 context, spread, §5.3 hygiene), each row with `available_at`; build blocked unless the leakage self-check passes |
 | Research API (`ci-api`) | Candles with scroll-back paging, dataset summary, cost model / heatmap / spread levels, feature set + one bar's features |
 | Backtester | Strategy spec (`strategy-spec/1`), event-driven engine (M5 decisions, M1 fills, 3 cost scenarios), frozen A/B/C split with a sealed holdout, trial counting per family, Deflated Sharpe, bootstrap, Monte Carlo, cost stress, walk-forward, §15 checklist |
-| Web app (`apps/web`) | Dark-gold research workspace: Overview (chart + features panel), Data Center (costs), Strategy Lab (visual builder), Backtest, Optimize, Validate, My Strategies, job tray |
+| Web app (`apps/web`) | **Simple mode** (default): Home, Idea test wizard, answer-first Result, Market samjho, Meri strategies, AI Research — plain Hinglish. **Expert mode**: dark-gold research workspace — Overview (chart + features panel), Data Center (costs), Behaviour Explorer, Strategy Lab, Backtest, Optimize, Validate, Research Pipeline, My Strategies, ML Lab, AI Assistant, job tray |
 
 **CEO Work Lab** (`/ceo-lab`, [docs/requirements/2026-09-21_ceo-work-lab.md](docs/requirements/2026-09-21_ceo-work-lab.md)):
 the owner writes a research mission; a Research Director and four specialist agents

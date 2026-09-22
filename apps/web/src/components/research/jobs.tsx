@@ -23,6 +23,8 @@ export function useJob(opts: { navigate?: boolean } = {}) {
     queryFn: () => research.job(jobId!),
     enabled: !!jobId,
     refetchInterval: (q) => (q.state.data && !ACTIVE.has(q.state.data.status) ? false : 800),
+    // Keep following while the tab is in the background, so the result opens on return.
+    refetchIntervalInBackground: true,
   });
   const done = useRef<string | null>(null);
 

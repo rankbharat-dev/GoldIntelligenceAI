@@ -78,6 +78,39 @@
         "CI_NEXT_DIST": ".next-dev2",
         "CI_API_ORIGIN": "http://127.0.0.1:8002"
       }
+    },
+    {
+      "name": "api-scratch",
+      "runtimeExecutable": "C:\\Gold_Intelligence_AI\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "ci_api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8003"
+      ],
+      "port": 8003,
+      "env": {
+        "CI_RESEARCH_DB_URL": "sqlite:///C:/Gold_Intelligence_AI/storage/scratch/ledger.db"
+      }
+    },
+    {
+      "name": "web-scratch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "C:\\Gold_Intelligence_AI\\apps\\web",
+        "run",
+        "dev"
+      ],
+      "port": 3300,
+      "autoPort": true,
+      "env": {
+        "CI_NEXT_DIST": ".next-scratch",
+        "CI_API_ORIGIN": "http://127.0.0.1:8003"
+      }
     }
   ]
 }

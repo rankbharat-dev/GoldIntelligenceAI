@@ -239,6 +239,30 @@ Design notes: blueprint "Implementation note — 2026-09-21 (Phases 7–10)" (af
 **Restart the owner's API (`ci-api`, :8000)** — it predates Phases 7–10 (new routers, new
 feature set, profiles). The web app on :3000 hot-reloads.
 
+## 6f. Simple mode UI (done 2026-09-22) — requirement `requirements/2026-09-22_simple-mode-ui.md`
+
+The owner found the 12-page research UI confusing. New **Simple mode** (default; sidebar
+switch Simple / Expert, stored in the browser as `ci-mode`): Home `/` (3 goals + my strategies
++ glossary chips), **Idea test** `/idea` (5 plain questions → real spec → tier-A backtest),
+**Result** `/result?run=` (answer first, 3 numbers with "?" help, before-costs − costs = left,
+next steps incl. one-click 1:3 re-test, Expert details), **Market samjho** `/learn`
+(behaviour screen in plain words), **Meri strategies** `/my` (journey Banaya → Pehla test →
+Sudhaaro → Final check → Paper trade + one next step), AI Research = `/ceo-lab`. Expert mode
+is unchanged; the chart Overview moved to `components/overview.tsx` and is shown at `/` in
+Expert mode and at `/chart` always. Plain wording, verdict and wizard → spec mapping live in
+`apps/web/src/lib/plain.ts`. Job polling now continues in background tabs.
+
+Owner guides (Hinglish): `docs/guides/FEATURE_GUIDE_HINGLISH.md` + the 27-slide
+`Candle_Intelligence_Feature_Guide.pptx` (explains the Expert pages; Simple mode is summarised
+at the top of the guide).
+
+Browser checks without touching the real ledger: launch.json `api-scratch` (:8003, throwaway sqlite
+ledger `storage/scratch/ledger.db` via `CI_RESEARCH_DB_URL`, git-ignored) + `web-scratch` (:3300). Verified:
+wizard → backtest → auto-open result (reversal: 13,102 trades, −0.19 R, "no edge"; London
+momentum buy small: 699 trades, +0.06 R before costs → −0.17 R after, "costs ate it"; 1:3
+re-test −0.12 R), Meri strategies journeys, Market samjho (18 behaviours, 0 pass after costs),
+Expert switch, phone width.
+
 ## 7. Start-of-session checklist
 
 ```powershell

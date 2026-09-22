@@ -8,9 +8,12 @@ import {
   CandlestickChart,
   Database,
   FlaskConical,
+  ChartLine,
   History,
+  House,
   LayoutDashboard,
   Library,
+  Lightbulb,
   Menu,
   ScanSearch,
   ShieldCheck,
@@ -25,6 +28,7 @@ import { useState } from "react";
 
 import { JobTray } from "@/components/research/jobs";
 import { fetchSummary } from "@/lib/api";
+import { setMode, useMode, type Mode } from "@/lib/mode";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -33,7 +37,17 @@ interface NavItem {
   icon: LucideIcon;
   href?: string; // absent = not built yet
   phase?: number; // roadmap phase that builds it (MASTER_PROMPT §8)
+  match?: string[]; // extra paths that highlight this item
 }
+
+// Simple mode (requirement 2026-09-22_simple-mode-ui.md): five goal-first items in plain Hinglish.
+const SIMPLE_NAV: NavItem[] = [
+  { label: "Home", hint: "Aaj kya karna hai?", icon: House, href: "/" },
+  { label: "Idea test karo", hint: "5 sawaal → seedha jawab", icon: Lightbulb, href: "/idea" },
+  { label: "AI Research", hint: "Sawaal do, AI team test kare", icon: Bot, href: "/ceo-lab" },
+  { label: "Market samjho", hint: "Pattern ke baad gold kya karta", icon: ChartLine, href: "/learn" },
+  { label: "Meri strategies", hint: "Kahan tak pahunchi, agla step", icon: Library, href: "/my", match: ["/result"] },
+];
 
 // Navigation from new_reference_image.png, extended with the owner's four additions
 // (requirements/2026-09-21_ui-redesign-research-workspace.md). Unbuilt pages stay visible
@@ -53,8 +67,9 @@ const NAV: NavItem[] = [
   { label: "AI Assistant", hint: "Ideas · explanations", icon: Bot, href: "/assistant" },
 ];
 
-function isActive(href: string, pathname: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+function isActive(item: NavItem, pathname: string) {
+  const hit = (h: string) => (h === "/" ? pathname === "/" : pathname === h || pathname.startsWith(`${h}/`));
+  return hit(item.href!) || (item.match ?? []).some(hit);
 }
 
 function Brand() {
@@ -71,9 +86,11 @@ function Brand() {
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const mode = useMode();
+  const items = mode === "simple" ? SIMPLE_NAV : NAV;
   return (
     <nav aria-label="Pages" className="space-y-0.5">
-      {NAV.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         const body = (
           <>
@@ -99,7 +116,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           );
         }
-        const active = isActive(item.href, pathname);
+        const active = isActive(item, pathname);
         return (
           <Link
             key={item.label}
@@ -118,6 +135,37 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
         );
       })}
     </nav>
+  );
+}
+
+/** Simple ↔ Expert. Expert shows every research page; nothing is removed either way. */
+function ModeSwitch() {
+  const mode = useMode();
+  const opt = (m: Mode, label: string) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={mode === m}
+      onClick={() => setMode(m)}
+      className={cn(
+        "h-8 flex-1 rounded-md text-xs font-semibold transition-colors",
+        mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="space-y-1.5 rounded-lg border bg-background/40 px-3 py-2.5">
+      <p className="text-[11px] text-muted-foreground">Mode</p>
+      <div role="radiogroup" aria-label="Mode" className="flex gap-1 rounded-lg bg-muted/50 p-0.5">
+        {opt("simple", "Simple")}
+        {opt("expert", "Expert")}
+      </div>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        {mode === "simple" ? "Expert mein saare research pages (chart, backtest, validate…) milenge." : "Simple mein sirf 5 aasaan pages."}
+      </p>
+    </div>
   );
 }
 
@@ -166,6 +214,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="min-h-0 flex-1 overflow-y-auto">
           <NavList />
         </div>
+        <ModeSwitch />
         <EngineStatus />
       </aside>
 
@@ -181,6 +230,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             <NavList onNavigate={() => setOpen(false)} />
+            <ModeSwitch />
             <EngineStatus />
           </aside>
         </div>
