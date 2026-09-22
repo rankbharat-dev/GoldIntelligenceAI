@@ -31,7 +31,7 @@ from candle_intel.data.aggregate import aggregate
 from candle_intel.features.registry import META_COLUMNS, feature_names
 from candle_intel.structure import geometry as structure
 
-FEATURE_VERSION = "features/3"  # /2 (Phase 7): market structure · /3: previous-day sweeps
+FEATURE_VERSION = "features/4"  # /2 market structure · /3 previous-day sweeps · /4 indicators
 
 BAR = timedelta(minutes=5)
 ATR_BARS = volatility.ATR_BARS
@@ -221,6 +221,106 @@ def htf_features(bars: pl.DataFrame, prefix: str, minutes: int, point: float) ->
 # ---------------------------------------------------------------- main
 
 
+BB_BARS, BB_K = 50, 2.1  # owner's Bollinger settings (2026-09-21)
+
+
+def _ema(e: pl.Expr, n: int) -> pl.Expr:
+    return e.ewm_mean(span=n, adjust=False, min_samples=n)
+
+
+def _wilder(e: pl.Expr, n: int) -> pl.Expr:
+    return e.ewm_mean(alpha=1 / n, adjust=False, min_samples=n)
+
+
+def _cross(a: pl.Expr, b: pl.Expr) -> pl.Expr:
+    d = a - b
+    up = (d > 0) & (d.shift() <= 0)
+    down = (d < 0) & (d.shift() >= 0)
+    return pl.when(up).then(1).when(down).then(-1).otherwise(0).cast(pl.Int8)
+
+
+def indicators(df: pl.DataFrame) -> pl.DataFrame:
+    """Classic indicators from this and earlier M5 bars only (recursive EMAs start at the
+    first bar and never look forward). ``df`` must be sorted by ``event_time`` and carry
+    OHLC, ``tick_volume``, ``_atr`` and ``trading_day``."""
+    o, h, low, c, atr = (pl.col(x) for x in ("open", "high", "low", "close", "_atr"))
+    vol = pl.col("tick_volume").cast(pl.Float64)
+    mid = c.rolling_mean(BB_BARS)
+    sd = c.rolling_std(BB_BARS, ddof=0)
+    up, lo = mid + BB_K * sd, mid - BB_K * sd
+    tp = (h + low + c) / 3
+    df = df.with_columns(
+        _e9=_ema(c, 9),
+        _e21=_ema(c, 21),
+        _e50=_ema(c, 50),
+        _e200=_ema(c, 200),
+        _e12=_ema(c, 12),
+        _e26=_ema(c, 26),
+        _up=up,
+        _lo=lo,
+        _mid=mid,
+        _chg=c - c.shift(),
+        _tr=pl.max_horizontal(h - low, (h - c.shift()).abs(), (low - c.shift()).abs()),
+        _dmp=pl.when(((h - h.shift()) > (low.shift() - low)) & ((h - h.shift()) > 0))
+        .then(h - h.shift())
+        .otherwise(0.0),
+        _dmm=pl.when(((low.shift() - low) > (h - h.shift())) & ((low.shift() - low) > 0))
+        .then(low.shift() - low)
+        .otherwise(0.0),
+        _pv=(tp * vol).cum_sum().over("trading_day", order_by="event_time"),
+        _v=vol.cum_sum().over("trading_day", order_by="event_time"),
+        _obv=(pl.when(c > c.shift()).then(vol).when(c < c.shift()).then(-vol).otherwise(0.0)).cum_sum(),
+    )
+    gain = _wilder(pl.col("_chg").clip(lower_bound=0), 14)
+    loss = _wilder((-pl.col("_chg")).clip(lower_bound=0), 14)
+    tr14 = _wilder(pl.col("_tr"), 14)
+    pdi = 100 * _wilder(pl.col("_dmp"), 14) / _positive(tr14)
+    mdi = 100 * _wilder(pl.col("_dmm"), 14) / _positive(tr14)
+    macd = pl.col("_e12") - pl.col("_e26")
+    hi14, lo14 = h.rolling_max(14), low.rolling_min(14)
+    df = df.with_columns(
+        rsi14=pl.when(loss == 0)
+        .then(pl.when(gain == 0).then(50.0).otherwise(100.0))
+        .otherwise(100 - 100 / (1 + gain / loss)),
+        plus_di14=pdi,
+        minus_di14=mdi,
+        _dx=100 * (pdi - mdi).abs() / _positive(pdi + mdi),
+        _macd=macd,
+        _sig=_ema(macd, 9),
+        stoch_k14=100 * (c - lo14) / _positive(hi14 - lo14),
+    )
+    e9, e21, e50, e200 = (pl.col(f"_e{n}") for n in (9, 21, 50, 200))
+    return df.with_columns(
+        bb_pctb=(c - pl.col("_lo")) / _positive(pl.col("_up") - pl.col("_lo")),
+        bb_width_atr=(pl.col("_up") - pl.col("_lo")) / atr,
+        bb_mid_dist_atr=(c - pl.col("_mid")) / atr,
+        bb_close_above_upper=c > pl.col("_up"),
+        bb_close_below_lower=c < pl.col("_lo"),
+        bb_high_above_upper=h > pl.col("_up"),
+        bb_low_below_lower=low < pl.col("_lo"),
+        **{f"ema{n}_dist_atr": (c - pl.col(f"_e{n}")) / atr for n in (9, 21, 50, 200)},
+        ema50_slope_atr=(e50 - e50.shift(5)) / atr,
+        ema200_slope_atr=(e200 - e200.shift(5)) / atr,
+        ema9_21_cross=_cross(e9, e21),
+        ema_stack=pl.when((e9 > e21) & (e21 > e50) & (e50 > e200))
+        .then(1)
+        .when((e9 < e21) & (e21 < e50) & (e50 < e200))
+        .then(-1)
+        .when(e200.is_null())
+        .then(None)
+        .otherwise(0)
+        .cast(pl.Int8),
+        macd_atr=pl.col("_macd") / atr,
+        macd_signal_atr=pl.col("_sig") / atr,
+        macd_hist_atr=(pl.col("_macd") - pl.col("_sig")) / atr,
+        macd_cross=_cross(pl.col("_macd"), pl.col("_sig")),
+        stoch_d3=pl.col("stoch_k14").rolling_mean(3),
+        adx14=_wilder(pl.col("_dx"), 14),
+        vwap_dist_atr=(c - pl.col("_pv") / _positive(pl.col("_v"))) / atr,
+        obv_flow20=(pl.col("_obv") - pl.col("_obv").shift(20)) / _positive(vol.rolling_sum(20)),
+    )
+
+
 def compute_features(bars: Bars, point: float, research_start: datetime | None = None) -> pl.DataFrame:
     """All features for every M5 bar. Output columns: META_COLUMNS + registry order."""
     o, h, low, c = (pl.col(x) for x in ("open", "high", "low", "close"))
@@ -392,6 +492,9 @@ def compute_features(bars: Bars, point: float, research_start: datetime | None =
         .fill_null(0)
         > 0,
     )
+
+    # ------------------------------------------------------------ classic indicators (features/4)
+    df = indicators(df.sort("event_time"))
 
     # ------------------------------------------------------------ higher timeframes (as-of close)
     for p, minutes in HTF_MINUTES.items():

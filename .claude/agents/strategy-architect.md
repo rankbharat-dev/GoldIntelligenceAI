@@ -13,7 +13,8 @@ research only). Your agent id is `strategy_architect`.
    task's `depends_on` tasks). `task_start(task_id, "strategy_architect")`.
 2. Write each hypothesis as a complete `strategy-spec/1`:
    `meta` (name, lowercase `family` slug, one-line `hypothesis`), `entries` (side + feature
-   conditions from `feature_catalogue`), `filters` (sessions, vol_regimes, hours_utc, …),
+   conditions from `feature_catalogue`; group `indicators` has Bollinger 50/2.1 — e.g.
+   `bb_close_below_lower == true`, `bb_pctb < 0` — EMA, RSI, MACD, Stochastic, ADX, VWAP, OBV), `filters` (sessions, vol_regimes, hours_utc, …),
    `exit` (`stop_atr`, `target_atr` — e.g. 1:3 R:R = stop 1.0, target 3.0 — `time_exit_bars`),
    `sizing` (`risk_pct` 1). Conditions are checked at the M5 close; entries fill at the next
    M1 open. Keep variants few (1–3); every variant later costs a trial.

@@ -57,6 +57,7 @@ GROUPS = {
     "m15": "M15 context (last closed M15 bar)",
     "h1": "H1 context (last closed H1 bar)",
     "structure": "Market structure (swings, S/R, trendlines, sweeps)",
+    "indicators": "Classic indicators (Bollinger, EMA, RSI, MACD, Stochastic, ADX, VWAP, OBV)",
     "spread": "Spread",
     "hygiene": "Hygiene flags (blueprint §5.3)",
 }
@@ -64,6 +65,56 @@ GROUPS = {
 
 def _f(name: str, group: str, unit: str, timing: Timing, description: str) -> FeatureSpec:
     return FeatureSpec(name, group, unit, timing, description)
+
+
+def _indicators() -> list[FeatureSpec]:
+    """Classic indicators on M5 closes (owner request 2026-09-21: Bollinger 50 / 2.1 plus the
+    well-known ones). Prices become ATR distances so values compare across 2021 → 2026."""
+    g, bc = "indicators", "bar_close"
+    ema = [
+        _f(f"ema{n}_dist_atr", g, "atr", bc, f"Close minus EMA({n}) of closes, ÷ ATR")
+        for n in (9, 21, 50, 200)
+    ]
+    return [
+        _f("bb_pctb", g, "x", bc, "Bollinger %B, BB(50, 2.1): 0 = lower band, 1 = upper band (can go past)"),
+        _f("bb_width_atr", g, "atr", bc, "Bollinger band width (upper − lower), BB(50, 2.1), ÷ ATR"),
+        _f("bb_mid_dist_atr", g, "atr", bc, "Close minus the Bollinger middle line (SMA 50), ÷ ATR"),
+        _f("bb_close_above_upper", g, "bool", bc, "Close above the upper band, BB(50, 2.1)"),
+        _f("bb_close_below_lower", g, "bool", bc, "Close below the lower band, BB(50, 2.1)"),
+        _f("bb_high_above_upper", g, "bool", bc, "High touched above the upper band, BB(50, 2.1)"),
+        _f("bb_low_below_lower", g, "bool", bc, "Low touched below the lower band, BB(50, 2.1)"),
+        *ema,
+        _f("ema50_slope_atr", g, "atr", bc, "Change of EMA(50) over the last 5 bars, ÷ ATR"),
+        _f("ema200_slope_atr", g, "atr", bc, "Change of EMA(200) over the last 5 bars, ÷ ATR"),
+        _f("ema9_21_cross", g, "sign", bc, "+1 EMA(9) crossed above EMA(21) on this bar, −1 below, 0 none"),
+        _f(
+            "ema_stack", g, "sign", bc, "+1 EMA 9 > 21 > 50 > 200 (up-trend order), −1 reverse order, 0 mixed"
+        ),
+        _f("rsi14", g, "x", bc, "RSI(14), Wilder smoothing, 0–100"),
+        _f("macd_atr", g, "atr", bc, "MACD line EMA(12) − EMA(26), ÷ ATR"),
+        _f("macd_signal_atr", g, "atr", bc, "MACD signal line EMA(9) of MACD, ÷ ATR"),
+        _f("macd_hist_atr", g, "atr", bc, "MACD histogram (MACD − signal), ÷ ATR"),
+        _f("macd_cross", g, "sign", bc, "+1 MACD crossed above its signal on this bar, −1 below, 0 none"),
+        _f("stoch_k14", g, "x", bc, "Stochastic %K(14): close inside the 14-bar high–low range, 0–100"),
+        _f("stoch_d3", g, "x", bc, "Stochastic %D: 3-bar average of %K(14)"),
+        _f("adx14", g, "x", bc, "ADX(14), Wilder: trend strength 0–100 (> 25 = trending)"),
+        _f("plus_di14", g, "x", bc, "+DI(14), Wilder: up-move strength 0–100"),
+        _f("minus_di14", g, "x", bc, "−DI(14), Wilder: down-move strength 0–100"),
+        _f(
+            "vwap_dist_atr",
+            g,
+            "atr",
+            bc,
+            "Close minus the trading day's VWAP (typical price × tick volume), ÷ ATR",
+        ),
+        _f(
+            "obv_flow20",
+            g,
+            "x",
+            bc,
+            "On-balance volume change over 20 bars ÷ tick volume of those bars (−1 … +1)",
+        ),
+    ]
 
 
 def _htf(p: str, label: str) -> list[FeatureSpec]:
@@ -452,6 +503,8 @@ FEATURES: tuple[FeatureSpec, ...] = (
         "htf_close",
         "M5 close minus the last confirmed H1 swing low, ÷ M5 ATR",
     ),
+    # ------------------------------------------------------------ indicators (features/4)
+    *_indicators(),
     # ------------------------------------------------------------ spread
     _f(
         "spread_pts",

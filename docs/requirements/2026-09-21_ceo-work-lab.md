@@ -148,7 +148,19 @@ reports nothing to the app). 185 tests green, ruff / TypeScript / ESLint clean.
 
 New tables since Phase 1: `ceo_runs`, `ceo_bridge` (created on API start; `002_ceo.sql` updated).
 
-## Next
+## Indicators (2026-09-21, late) — features/4
+
+Owner: "BB features jod do aur kuch indicator ema and volume ya jo bhi famous hai wo add kar do"
+(for the mission "indicator bhi use karna hai bollinger band 50 deviation 2.1"). New group
+`indicators` (27 features), all from the bar's own close and earlier bars, prices as ATR
+distances: Bollinger **50 / 2.1** (%B, width, mid distance, close / touch outside), EMA
+9/21/50/200 distances, EMA 50/200 slopes, EMA 9×21 cross, EMA stack, RSI 14 (Wilder), MACD
+12/26/9 (+ signal, histogram, cross), Stochastic 14/3, ADX 14 with ±DI, daily VWAP distance
+(typical price × tick volume, resets at 17:00 NY), OBV flow over 20 bars (tick volume — spot
+gold has no exchange volume). Feature set `exness-mt5trial7_f20260921T170249Z`, leakage
+self-check passed; `tests/unit/test_indicators.py` checks them against step-by-step formulas.
+Warm-up: EMA 200 / BB 50 are empty for the first bars of the history (before tier A).
+
 
 - Paper trading (roadmap Phase 11) and 20 years of data (Phase 12) — the demo's PDL-long idea
   needs the longer history before tier B.
